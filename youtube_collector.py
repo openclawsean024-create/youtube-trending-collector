@@ -34,23 +34,24 @@ class YouTubeTrendingCollector:
             json.dump(self.data, f, ensure_ascii=False, indent=2)
     
     def load_config(self):
-        """載入配置"""
+        """載入配置（環境變數優先）"""
+        file_config = {}
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    file_config = json.load(f)
             except:
                 pass
         
-        default_config = {
-            "telegram_bot_token": "8423561808:AAGj7iLgE0R1Y6bU6JfDJRfSLM6ZsDW6yc4",
-            "telegram_chat_id": "",
-            "region": "TW",
-            "category": "All",
-            "max_videos": 20,
-            "min_views": 100000,
-            "post_time": "20:00",
-            "include_stats": True
+        return {
+            "telegram_bot_token": os.environ.get("TELEGRAM_BOT_TOKEN") or file_config.get("telegram_bot_token", ""),
+            "telegram_chat_id": os.environ.get("TELEGRAM_CHAT_ID") or file_config.get("telegram_chat_id", ""),
+            "region": file_config.get("region", "TW"),
+            "category": file_config.get("category", "All"),
+            "max_videos": file_config.get("max_videos", 20),
+            "min_views": file_config.get("min_views", 100000),
+            "post_time": file_config.get("post_time", "20:00"),
+            "include_stats": file_config.get("include_stats", True)
         }
         
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
