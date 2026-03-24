@@ -1,0 +1,24 @@
+# Environment files (contain secrets)
+.env
+.env.local
+.env.production
+
+# Config with secrets
+youtube_config.json
+config.json
+*.local.json
+
+# Data files
+youtube_data.json
+*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
