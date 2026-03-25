@@ -2,12 +2,22 @@
 
 自動收集 YouTube 熱門影片並發送到 Telegram 群組。
 
+## 🌐 前端儀表板
+
+訪問 https://youtube-trending-collector.vercel.app 查看即時熱門排行
+
+功能：
+- 📊 即時熱門影片排行（熱度分數計算）
+- 📺 影片詳細資訊（觀看、按讚、留言）
+- ⚙️ 配置狀態查看
+- 🔄 一鍵收集新影片
+
 ## 功能
 
 ### 📺 影片收集
 - 自動收集 YouTube 熱門影片
 - 24 小時內熱門排行
-- 觀看次數、、按讚數、留言數
+- 觀看次數、按讚數、留言數
 
 ### 🔥 熱度計算
 - 觀看次數 × 1
@@ -19,32 +29,25 @@
 - Markdown 格式
 - 精美排版
 
-## 安裝
+## 開發
 
+### 前端（Next.js）
 ```bash
-pip install requests
+npm install
+npm run dev
 ```
 
-## 使用方法
-
-### 收集影片
+### 後端（Python CLI）
 ```bash
-python cli.py collect
+python cli.py collect   # 收集影片
+python cli.py trending  # 查看熱門排行
+python cli.py post     # 發送到 Telegram
+python cli.py config   # 顯示配置
 ```
 
-### 查看熱門排行
+### 部署到 Vercel
 ```bash
-python cli.py trending
-```
-
-### 發送到 Telegram
-```bash
-python cli.py post
-```
-
-### 測試發送
-```bash
-python cli.py test
+vercel --prod
 ```
 
 ## 配置
@@ -58,39 +61,4 @@ python cli.py test
   "region": "TW",
   "post_time": "20:00"
 }
-```
-
-## 熱度排行
-
-| 排名 | 因素 |
-|------|------|
-| 🥇 | 觀看次數最高 |
-| 🥈 | 按讚數最高 |
-| 🥉 | 討論度最高 |
-
-## 定時執行
-
-```bash
-# 每天 20:00 執行
-python cli.py collect && python cli.py post
-```
-
-## 訊息格式
-
-```
-🔥 YouTube 熱門影片 TOP 20
-⏰ 過去 24 小時
-===================================
-
-1. 【影片標題】
-   📺 頻道名稱
-   👀 5.2M | 👍 350K | 💬 28K
-   ⏱️ 15:30
-   🔗 [觀看連結]
-
-...
-===================================
-📊 總觀看: 52M
-📝 影片數: 20 部
-⏰ 更新時間: 20:00
 ```

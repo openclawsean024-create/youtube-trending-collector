@@ -10,7 +10,11 @@ config.json
 
 # Data files
 youtube_data.json
-*.json
+
+# Dependencies
+node_modules/
+.next/
+dist/
 
 # Python
 __pycache__/
@@ -22,3 +26,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Vercel
+.vercel
+
+# Misc
+*.log
