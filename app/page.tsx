@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { UserButton, SignInButton } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 
 interface Video {
   rank: number
@@ -47,6 +49,7 @@ interface ConfigResponse {
 }
 
 export default function Dashboard() {
+  const { isSignedIn, isLoaded } = useUser()
   const [videos, setVideos] = useState<Video[]>([])
   const [config, setConfig] = useState<Config | null>(null)
   const [loading, setLoading] = useState(true)
@@ -157,6 +160,15 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-3">
+              {!isLoaded ? null : isSignedIn ? (
+                <UserButton />
+              ) : (
+                <SignInButton mode="modal">
+                  <button className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors">
+                    登入使用
+                  </button>
+                </SignInButton>
+              )}
               <button
                 onClick={handleCollect}
                 disabled={collecting}

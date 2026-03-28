@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import * as fs from 'fs'
 import * as path from 'path'
 
 const CONFIG_FILE = path.join(process.cwd(), 'youtube_config.json')
 
 export async function GET() {
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     let config = {
       telegram_bot_token: '',

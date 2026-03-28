@@ -1,31 +1,27 @@
 import { NextResponse } from 'next/server'
-import { execSync } from 'child_process'
-import * as fs from 'fs'
-import * as path from 'path'
+import { auth } from '@clerk/nextjs/server'
+import axios from 'axios'
 
-const DATA_FILE = path.join(process.cwd(), 'youtube_data.json')
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY
+const REGION = process.env.YOUTUBE_REGION || 'TW'
 
 interface Video {
+  rank: number
   id: string
   video_id: string
   title: string
   channel: string
-  channel_id: string
   views: number
+  views_formatted: string
   likes: number
+  likes_formatted: string
   comments: number
+  comments_formatted: string
   duration: string
-  published: string
-  thumbnail: string
   url: string
+  thumbnail: string
   hot_score: number
   collected_at: string
-}
-
-interface TrendingData {
-  videos: Video[]
-  last_update: string | null
-  total: number
 }
 
 function formatViewCount(views: number): string {
@@ -34,89 +30,106 @@ function formatViewCount(views: number): string {
   return views.toString()
 }
 
-function formatDuration(duration: string): string {
-  if (!duration) return '未知'
-  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
-  if (!match) return duration
-  const hours = match[1] ? parseInt(match[1]) : 0
-  const minutes = match[2] ? parseInt(match[2]) : 0
-  const seconds = match[3] ? parseInt(match[3]) : 0
-  if (hours > 0) return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+function formatDuration(iso: string): string {
+  if (!iso) return '未知'
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!match) return iso
+  const h = match[1] ? parseInt(match[1]) : 0
+  const m = match[2] ? parseInt(match[2]) : 0
+  const s = match[3] ? parseInt(match[3]) : 0
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 export async function GET() {
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
-    // Try to run the Python collector to get latest data
-    let data: TrendingData = {
-      videos: [],
-      last_update: null,
-      total: 0
+    // No API key = return graceful empty state
+    if (!YOUTUBE_API_KEY) {
+      return NextResponse.json({
+        success: false,
+        error: 'YOUTUBE_API_KEY not configured',
+        trending: [],
+        total: 0,
+        last_update: null,
+      })
     }
 
-    // Check if data file exists
-    if (fs.existsSync(DATA_FILE)) {
-      try {
-        const raw = fs.readFileSync(DATA_FILE, 'utf-8')
-        const parsed = JSON.parse(raw)
-        data.videos = parsed.videos || []
-        data.last_update = parsed.last_update || null
-        data.total = data.videos.length
-      } catch (e) {
-        console.error('Failed to parse data file:', e)
+    // Fetch trending videos from YouTube Data API v3
+    const trendingRes = await axios.get(
+      'https://www.googleapis.com/youtube/v3/videos',
+      {
+        params: {
+          part: 'snippet,statistics,contentDetails',
+          chart: 'mostPopular',
+          regionCode: REGION,
+          maxResults: 20,
+          key: YOUTUBE_API_KEY,
+        },
+        timeout: 10000,
       }
-    }
+    )
 
-    // If no data, run the collector
-    if (data.videos.length === 0) {
-      try {
-        execSync('python3 cli.py collect', { cwd: process.cwd(), timeout: 15000 })
-        if (fs.existsSync(DATA_FILE)) {
-          const raw = fs.readFileSync(DATA_FILE, 'utf-8')
-          const parsed = JSON.parse(raw)
-          data.videos = parsed.videos || []
-          data.last_update = parsed.last_update || null
-          data.total = data.videos.length
-        }
-      } catch (e) {
-        console.error('Failed to run collector:', e)
-      }
-    }
+    const items = trendingRes.data.items || []
+    const now = new Date().toISOString()
 
-    // Sort by hot_score and take top 20
-    const trending = [...data.videos]
-      .sort((a, b) => (b.hot_score || 0) - (a.hot_score || 0))
-      .slice(0, 20)
-      .map((v, i) => ({
+    const trending: Video[] = items.map((item: any, i: number) => {
+      const stats = item.statistics || {}
+      const snippet = item.snippet || {}
+      const details = item.contentDetails || {}
+
+      const views = parseInt(stats.viewCount || '0')
+      const likes = parseInt(stats.likeCount || '0')
+      const comments = parseInt(stats.commentCount || '0')
+
+      // Hot score formula: views*1 + likes*3 + comments*5 / 1000
+      const hot_score = Math.round((views * 1 + likes * 3 + comments * 5) / 1000)
+
+      return {
         rank: i + 1,
-        id: v.id,
-        video_id: v.video_id,
-        title: v.title,
-        channel: v.channel,
-        views: v.views,
-        views_formatted: formatViewCount(v.views),
-        likes: v.likes,
-        likes_formatted: formatViewCount(v.likes),
-        comments: v.comments,
-        comments_formatted: formatViewCount(v.comments),
-        duration: formatDuration(v.duration),
-        url: v.url,
-        thumbnail: v.thumbnail || `https://img.youtube.com/vi/${v.video_id}/mqdefault.jpg`,
-        hot_score: v.hot_score,
-        collected_at: v.collected_at,
-      }))
+        id: item.id,
+        video_id: item.id,
+        title: snippet.title || '無標題',
+        channel: snippet.channelTitle || '未知頻道',
+        views,
+        views_formatted: formatViewCount(views),
+        likes,
+        likes_formatted: formatViewCount(likes),
+        comments,
+        comments_formatted: formatViewCount(comments),
+        duration: formatDuration(details.duration || ''),
+        url: `https://www.youtube.com/watch?v=${item.id}`,
+        thumbnail: snippet.thumbnails?.high?.url
+          || snippet.thumbnails?.medium?.url
+          || snippet.thumbnails?.default?.url
+          || `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
+        hot_score,
+        collected_at: now,
+      }
+    })
+
+    // Sort by hot_score descending
+    trending.sort((a, b) => b.hot_score - a.hot_score)
+    trending.forEach((v, i) => { v.rank = i + 1 })
 
     return NextResponse.json({
       success: true,
       trending,
-      total: data.total,
-      last_update: data.last_update,
+      total: trending.length,
+      last_update: now,
     })
   } catch (error: any) {
-    console.error('Trending API error:', error)
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch trending' },
-      { status: 500 }
-    )
+    console.error('YouTube API error:', error?.response?.data || error.message)
+    return NextResponse.json({
+      success: false,
+      error: error.message || 'Failed to fetch from YouTube API',
+      trending: [],
+      total: 0,
+      last_update: null,
+    })
   }
 }
