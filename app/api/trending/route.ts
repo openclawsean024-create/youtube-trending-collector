@@ -48,7 +48,6 @@ export async function GET() {
   }
 
   try {
-    // No API key = return graceful empty state
     if (!YOUTUBE_API_KEY) {
       return NextResponse.json({
         success: false,
@@ -59,7 +58,6 @@ export async function GET() {
       })
     }
 
-    // Fetch trending videos from YouTube Data API v3
     const trendingRes = await axios.get(
       'https://www.googleapis.com/youtube/v3/videos',
       {
@@ -85,8 +83,6 @@ export async function GET() {
       const views = parseInt(stats.viewCount || '0')
       const likes = parseInt(stats.likeCount || '0')
       const comments = parseInt(stats.commentCount || '0')
-
-      // Hot score formula: views*1 + likes*3 + comments*5 / 1000
       const hot_score = Math.round((views * 1 + likes * 3 + comments * 5) / 1000)
 
       return {
@@ -112,7 +108,6 @@ export async function GET() {
       }
     })
 
-    // Sort by hot_score descending
     trending.sort((a, b) => b.hot_score - a.hot_score)
     trending.forEach((v, i) => { v.rank = i + 1 })
 

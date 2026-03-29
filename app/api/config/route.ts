@@ -31,9 +31,8 @@ export async function GET() {
       }
     }
 
-    // Mask token
     const token = config.telegram_bot_token || ''
-    const maskedToken = token.length > 15 
+    const maskedToken = token.length > 15
       ? token.substring(0, 8) + '...' + token.substring(token.length - 5)
       : token
 

@@ -117,7 +117,7 @@ export default function Dashboard() {
   useEffect(() => {
     fetchTrending()
     fetchConfig()
-    const interval = setInterval(fetchTrending, 60000) // refresh every minute
+    const interval = setInterval(fetchTrending, 60000)
     return () => clearInterval(interval)
   }, [fetchTrending, fetchConfig])
 
@@ -136,14 +136,12 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#0f0f0f]">
-      {/* Notification */}
       {notification && (
         <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse">
           {notification}
         </div>
       )}
 
-      {/* Header */}
       <header className="bg-[#1a1a1a] border-b border-[#333] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -194,7 +192,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-1 mt-4">
             <button
               onClick={() => setActiveTab('trending')}
@@ -229,7 +226,6 @@ export default function Dashboard() {
 
         {activeTab === 'trending' && (
           <>
-            {/* Stats Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="stat-card rounded-xl p-4">
                 <p className="text-gray-400 text-xs mb-1">總影片數</p>
@@ -249,7 +245,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Video List */}
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="animate-spin w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full"/>
@@ -273,12 +268,10 @@ export default function Dashboard() {
                     key={video.id}
                     className="video-card bg-[#1a1a1a] border border-[#272727] rounded-xl p-4 flex gap-4"
                   >
-                    {/* Rank */}
                     <div className="flex items-center justify-center w-8 shrink-0">
                       <span className="text-xl">{getRankEmoji(video.rank)}</span>
                     </div>
 
-                    {/* Thumbnail */}
                     <div className="shrink-0">
                       <a href={video.url} target="_blank" rel="noopener noreferrer">
                         <img
@@ -292,7 +285,6 @@ export default function Dashboard() {
                       </a>
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <a
                         href={video.url}
@@ -328,7 +320,6 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* External Link */}
                     <div className="shrink-0 flex items-center">
                       <a
                         href={video.url}
@@ -427,7 +418,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Heat Formula */}
             <div className="mt-4 bg-[#1a1a1a] border border-[#272727] rounded-xl p-6">
               <h3 className="text-white font-bold mb-4">🔥 熱度計算公式</h3>
               <div className="bg-[#272727] rounded-lg p-4 font-mono text-sm">
@@ -442,7 +432,6 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-[#272727] mt-8 py-6">
         <div className="max-w-7xl mx-auto px-4 text-center text-gray-500 text-xs">
           <p>YouTube Trending Collector · 自動收集 · Telegram 發送</p>
