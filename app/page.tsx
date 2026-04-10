@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { UserButton, SignInButton } from '@clerk/nextjs'
-import { useUser } from '@clerk/nextjs'
 
 interface Video {
   rank: number
@@ -49,7 +47,6 @@ interface ConfigResponse {
 }
 
 export default function Dashboard() {
-  const { isSignedIn, isLoaded } = useUser()
   const [videos, setVideos] = useState<Video[]>([])
   const [config, setConfig] = useState<Config | null>(null)
   const [loading, setLoading] = useState(true)
@@ -59,10 +56,31 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'trending' | 'config'>('trending')
   const [notification, setNotification] = useState<string | null>(null)
+  const [editCategory, setEditCategory] = useState('All')
+  const [editMinViews, setEditMinViews] = useState(100000)
 
   const showNotification = (msg: string) => {
     setNotification(msg)
     setTimeout(() => setNotification(null), 3000)
+  }
+
+  const saveConfig = async () => {
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: editCategory, min_views: Number(editMinViews) }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setConfig(data.config)
+        showNotification('設定已儲存 ✅')
+      } else {
+        showNotification('儲存失敗：' + (data.error || '未知錯誤'))
+      }
+    } catch {
+      showNotification('儲存失敗，請稍後再試')
+    }
   }
 
   const fetchTrending = useCallback(async () => {
@@ -90,6 +108,8 @@ export default function Dashboard() {
       const data: ConfigResponse = await res.json()
       if (data.success) {
         setConfig(data.config)
+        setEditCategory(data.config.category)
+        setEditMinViews(data.config.min_views)
       }
     } catch (e) {
       // ignore
@@ -158,15 +178,6 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-3">
-              {!isLoaded ? null : isSignedIn ? (
-                <UserButton />
-              ) : (
-                <SignInButton mode="modal">
-                  <button className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors">
-                    登入使用
-                  </button>
-                </SignInButton>
-              )}
               <button
                 onClick={handleCollect}
                 disabled={collecting}
@@ -396,6 +407,47 @@ export default function Dashboard() {
 
                 <div className="flex items-center justify-between py-3 border-b border-[#272727]">
                   <div>
+                    <p className="text-white font-medium">分類</p>
+                    <p className="text-xs text-gray-500 mt-0.5">影片分類（影響收集範圍）</p>
+                  </div>
+                  <select
+                    value={editCategory}
+                    onChange={e => setEditCategory(e.target.value)}
+                    className="bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5"
+                  >
+                    <option value="All">All</option>
+                    <option value="Music">音樂</option>
+                    <option value="Gaming">遊戲</option>
+                    <option value="News">新聞</option>
+                    <option value="Movies">電影</option>
+                    <option value="Sports">體育</option>
+                    <option value="Comedy">喜劇</option>
+                    <option value="Entertainment">娛樂</option>
+                    <option value="Science">科學</option>
+                    <option value="Technology">科技</option>
+                    <option value="Education">教育</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between py-3 border-b border-[#272727]">
+                  <div>
+                    <p className="text-white font-medium">最少觀看次數</p>
+                    <p className="text-xs text-gray-500 mt-0.5">只收集超過此觀看數的影片</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={editMinViews}
+                      onChange={e => setEditMinViews(Number(e.target.value))}
+                      min={0}
+                      className="w-36 bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5"
+                    />
+                    <span className="text-gray-400 text-xs">次</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between py-3 border-b border-[#272727]">
+                  <div>
                     <p className="text-white font-medium">最大影片數</p>
                     <p className="text-xs text-gray-500 mt-0.5">每次收集的影片上限</p>
                   </div>
@@ -409,12 +461,13 @@ export default function Dashboard() {
                   </div>
                   <span className="text-white text-sm">{config?.post_time || '20:00'}</span>
                 </div>
-              </div>
 
-              <div className="mt-6 p-4 bg-[#272727] rounded-lg">
-                <p className="text-gray-400 text-xs">
-                  💡 編輯 <code className="text-red-400 bg-[#1a1a1a] px-1 py-0.5 rounded">youtube_config.json</code> 來修改配置
-                </p>
+                <button
+                  onClick={saveConfig}
+                  className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors"
+                >
+                  儲存設定
+                </button>
               </div>
             </div>
 

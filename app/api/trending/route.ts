@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import axios from 'axios'
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY
@@ -42,11 +41,6 @@ function formatDuration(iso: string): string {
 }
 
 export async function GET() {
-  const { userId } = await auth()
-  if (!userId) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     if (!YOUTUBE_API_KEY) {
       return NextResponse.json({
