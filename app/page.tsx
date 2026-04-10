@@ -54,6 +54,17 @@ function formatNum(n: string) {
   return num.toLocaleString();
 }
 
+function formatDateTime(dateStr: string) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${y}/${mo}/${day} ${h}:${mi}`;
+}
+
 function timeAgo(dateStr: string) {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
@@ -75,6 +86,21 @@ export default function HomePage() {
   const [discordUrl, setDiscordUrl] = useState("");
   const [notifyLoading, setNotifyLoading] = useState(false);
   const [notifyMsg, setNotifyMsg] = useState("");
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Load defaults from /api/config on mount
+  useEffect(() => {
+    if (settingsLoaded) return;
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data: { discordWebhook?: string; defaultRegion?: string; defaultCategory?: string }) => {
+        if (data.discordWebhook) setDiscordUrl(data.discordWebhook);
+        if (data.defaultRegion) setRegion(data.defaultRegion);
+        if (data.defaultCategory !== undefined) setCategory(data.defaultCategory);
+        setSettingsLoaded(true);
+      })
+      .catch(() => setSettingsLoaded(true));
+  }, [settingsLoaded]);
 
   const fetchVideos = useCallback(async () => {
     setLoading(true);
@@ -160,9 +186,15 @@ export default function HomePage() {
             <svg width="32" height="32" viewBox="0 0 24 24" fill="#FF0000">
               <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
             </svg>
-            <h1 className="text-xl font-bold tracking-tight">
+            <h1 className="text-xl font-bold tracking-tight flex-1">
               YouTube <span className="text-red-600">熱門蒐集器</span>
             </h1>
+            <a
+              href="/settings"
+              className="text-zinc-400 hover:text-zinc-200 text-sm transition-colors border border-zinc-700 hover:border-zinc-500 rounded-lg px-3 py-1.5"
+            >
+              ⚙️ 設定
+            </a>
           </div>
 
           {/* Controls */}
@@ -294,7 +326,9 @@ export default function HomePage() {
                     <span>👍 {formatNum(video.likes)}</span>
                     <span>💬 {formatNum(video.comments)}</span>
                   </div>
-                  <p className="text-xs text-zinc-600 mt-1">{timeAgo(video.publishedAt)}</p>
+                  <p className="text-xs text-zinc-600 mt-1">
+                    {timeAgo(video.publishedAt)} · {formatDateTime(video.publishedAt)}
+                  </p>
                 </div>
               </a>
             ))}
