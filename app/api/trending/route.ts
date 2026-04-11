@@ -40,15 +40,34 @@ function formatDuration(iso: string): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+// Sample data for demo/preview mode (when API key unavailable)
+const SAMPLE_VIDEOS: Video[] = [
+  { rank: 1, id: 'dQw4w9WgXcQ', video_id: 'dQw4w9WgXcQ', title: '🎵 熱門音樂 MV - 永遠經典', channel: '官方頻道', views: 12500000, views_formatted: '12.5M', likes: 890000, likes_formatted: '890K', comments: 45000, comments_formatted: '45K', duration: '3:04', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg', hot_score: 15670, collected_at: new Date().toISOString() },
+  { rank: 2, id: 'sample2', video_id: 'sample2', title: '🔥 遊戲實況 - 最新熱門影片', channel: '遊戲達人', views: 8900000, views_formatted: '8.9M', likes: 560000, likes_formatted: '560K', comments: 32000, comments_formatted: '32K', duration: '45:30', url: 'https://www.youtube.com/watch?v=sample2', thumbnail: 'https://img.youtube.com/vi/sample2/hqdefault.jpg', hot_score: 9860, collected_at: new Date().toISOString() },
+  { rank: 3, id: 'sample3', video_id: 'sample3', title: '📱 科技評測 - 新品開箱', channel: '科技先生', views: 5600000, views_formatted: '5.6M', likes: 340000, likes_formatted: '340K', comments: 18000, comments_formatted: '18K', duration: '18:22', url: 'https://www.youtube.com/watch?v=sample3', thumbnail: 'https://img.youtube.com/vi/sample3/hqdefault.jpg', hot_score: 6140, collected_at: new Date().toISOString() },
+  { rank: 4, id: 'sample4', video_id: 'sample4', title: '🍜 美食探店 - 在地推薦', channel: '吃貨世界', views: 3200000, views_formatted: '3.2M', likes: 210000, likes_formatted: '210K', comments: 12000, comments_formatted: '12K', duration: '12:45', url: 'https://www.youtube.com/watch?v=sample4', thumbnail: 'https://img.youtube.com/vi/sample4/hqdefault.jpg', hot_score: 3680, collected_at: new Date().toISOString() },
+  { rank: 5, id: 'sample5', video_id: 'sample5', title: '📚 知識分享 - 必學技巧', channel: '學習頻道', views: 2100000, views_formatted: '2.1M', likes: 180000, likes_formatted: '180K', comments: 9500, comments_formatted: '9.5K', duration: '22:10', url: 'https://www.youtube.com/watch?v=sample5', thumbnail: 'https://img.youtube.com/vi/sample5/hqdefault.jpg', hot_score: 2610, collected_at: new Date().toISOString() },
+]
+
+function getDemoTrending(region: string): Video[] {
+  return SAMPLE_VIDEOS.map((v, i) => ({
+    ...v,
+    collected_at: new Date().toISOString(),
+    rank: i + 1,
+  }))
+}
+
 export async function GET() {
   try {
     if (!YOUTUBE_API_KEY) {
+      // Return demo data instead of empty state
+      const demoTrending = getDemoTrending(REGION)
       return NextResponse.json({
-        success: false,
-        error: 'YOUTUBE_API_KEY not configured',
-        trending: [],
-        total: 0,
-        last_update: null,
+        success: true,
+        trending: demoTrending,
+        total: demoTrending.length,
+        last_update: new Date().toISOString(),
+        demo: true,
       })
     }
 
@@ -113,12 +132,15 @@ export async function GET() {
     })
   } catch (error: any) {
     console.error('YouTube API error:', error?.response?.data || error.message)
+    // Fall back to demo data on error
+    const demoTrending = getDemoTrending(REGION)
     return NextResponse.json({
-      success: false,
-      error: error.message || 'Failed to fetch from YouTube API',
-      trending: [],
-      total: 0,
-      last_update: null,
+      success: true,
+      trending: demoTrending,
+      total: demoTrending.length,
+      last_update: new Date().toISOString(),
+      demo: true,
+      api_error: error.message,
     })
   }
 }

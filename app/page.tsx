@@ -38,6 +38,7 @@ interface TrendingResponse {
   trending: Video[]
   total: number
   last_update: string | null
+  demo?: boolean
   error?: string
 }
 
@@ -58,6 +59,7 @@ export default function Dashboard() {
   const [notification, setNotification] = useState<string | null>(null)
   const [editCategory, setEditCategory] = useState('All')
   const [editMinViews, setEditMinViews] = useState(100000)
+  const [isDemoMode, setIsDemoMode] = useState(false)
 
   const showNotification = (msg: string) => {
     setNotification(msg)
@@ -91,6 +93,7 @@ export default function Dashboard() {
         setVideos(data.trending)
         setLastUpdate(data.last_update)
         setTotalVideos(data.total)
+        setIsDemoMode(!!data.demo)
         setError(null)
       } else {
         setError(data.error || 'Failed to fetch trending')
@@ -232,6 +235,12 @@ export default function Dashboard() {
         {error && (
           <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">
             ⚠️ {error}
+          </div>
+        )}
+
+        {isDemoMode && (
+          <div className="bg-yellow-900/30 border border-yellow-700 text-yellow-300 px-4 py-3 rounded-lg mb-6 text-sm">
+            📺 目前為範例資料模式（YOUTUBE_API_KEY 未設定）。如需即時資料，請設定 YouTube Data API Key。
           </div>
         )}
 
