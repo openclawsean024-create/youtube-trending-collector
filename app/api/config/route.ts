@@ -58,8 +58,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const config = loadConfig()
 
+    if (typeof body.telegram_bot_token === 'string') config.telegram_bot_token = body.telegram_bot_token
+    if (typeof body.telegram_chat_id === 'string') config.telegram_chat_id = body.telegram_chat_id
+    if (typeof body.region === 'string') config.region = body.region
     if (typeof body.category === 'string') config.category = body.category
+    if (typeof body.max_videos === 'number') config.max_videos = body.max_videos
     if (typeof body.min_views === 'number') config.min_views = body.min_views
+    if (typeof body.post_time === 'string') config.post_time = body.post_time
 
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2))
     return NextResponse.json({ success: true, config: maskConfig(config) })
