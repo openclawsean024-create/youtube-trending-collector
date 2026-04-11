@@ -1,6 +1,6 @@
 # YouTube 熱門影片收集器
 
-自動收集 YouTube 熱門影片並發送到 Telegram 群組。
+自動收集 YouTube 熱門影片並發送到 Telegram / Notion。
 
 ## 🌐 前端儀表板
 
@@ -11,6 +11,7 @@
 - 📺 影片詳細資訊（觀看、按讚、留言）
 - ⚙️ 配置狀態查看
 - 🔄 一鍵收集新影片
+- 📝 同步 Notion 頁面欄位（Sean）
 
 ## 功能
 
@@ -29,6 +30,10 @@
 - Markdown 格式
 - 精美排版
 
+### 📝 Notion 同步
+- 更新 Page ID `329449ca-65d8-81c6-9a6f-e1197bcbce42`
+- 使用 `Sean` 欄位存放最新收集結果數量
+
 ## 開發
 
 ### 前端（Next.js）
@@ -43,6 +48,7 @@ python cli.py collect   # 收集影片
 python cli.py trending  # 查看熱門排行
 python cli.py post     # 發送到 Telegram
 python cli.py config   # 顯示配置
+python youtube_collector.py  # 測試收集並同步 Notion
 ```
 
 ### 部署到 Vercel
@@ -52,7 +58,7 @@ vercel --prod
 
 ## 配置
 
-編輯 `youtube_config.json`：
+編輯 `youtube_config.json` 與環境變數：
 
 ```json
 {
