@@ -52,7 +52,7 @@ export default function Dashboard() {
   const [config, setConfig] = useState<Config | null>(null)
   const [loading, setLoading] = useState(true)
   const [collecting, setCollecting] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate] = useState<string | null>(new Date().toISOString())
   const [totalVideos, setTotalVideos] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'trending' | 'config'>('trending')
