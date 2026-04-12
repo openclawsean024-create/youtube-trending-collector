@@ -340,7 +340,7 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f9f9f9] text-[#0f0f0f] flex flex-col">
+    <div className="min-h-screen bg-[#0f0f0f] text-[#f5f5f5] flex flex-col">
       {/* ===== HEADER ===== */}
       <header className="sticky top-0 z-50 bg-white border-b border-[#e5e5e5] h-14 flex items-center px-4 gap-4">
         {/* Left: hamburger + logo */}
