@@ -1,146 +1,176 @@
-import { NextResponse } from 'next/server'
-import axios from 'axios'
+import { NextRequest, NextResponse } from "next/server";
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY
-const REGION = process.env.YOUTUBE_REGION || 'TW'
+const API_KEY = process.env.YOUTUBE_API_KEY;
+const BASE_URL = "https://www.googleapis.com/youtube/v3";
 
-interface Video {
-  rank: number
-  id: string
-  video_id: string
-  title: string
-  channel: string
-  views: number
-  views_formatted: string
-  likes: number
-  likes_formatted: string
-  comments: number
-  comments_formatted: string
-  duration: string
-  url: string
-  thumbnail: string
-  hot_score: number
-  collected_at: string
+// In-memory cache with 5 min TTL
+interface CacheEntry {
+  data: unknown;
+  timestamp: number;
+}
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+export interface VideoItem {
+  id: string;
+  title: string;
+  channel: string;
+  channelId: string;
+  thumbnail: string;
+  views: string;
+  likes: string;
+  comments: string;
+  publishedAt: string;
+  trendingRank: number;
+  categoryId: string;
+  description: string;
 }
 
-function formatViewCount(views: number): string {
-  if (views >= 1000000) return `${(views / 1000000).toFixed(1)}M`
-  if (views >= 1000) return `${(views / 1000).toFixed(1)}K`
-  return views.toString()
+interface YouTubeVideo {
+  id: string;
+  snippet: {
+    title: string;
+    channelTitle: string;
+    channelId: string;
+    publishedAt: string;
+    thumbnails: { high?: { url: string }; medium?: { url: string } };
+    categoryId: string;
+    description: string;
+  };
+  statistics?: {
+    viewCount?: string;
+    likeCount?: string;
+    commentCount?: string;
+  };
 }
 
-function formatDuration(iso: string): string {
-  if (!iso) return '未知'
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
-  if (!match) return iso
-  const h = match[1] ? parseInt(match[1]) : 0
-  const m = match[2] ? parseInt(match[2]) : 0
-  const s = match[3] ? parseInt(match[3]) : 0
-  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-  return `${m}:${s.toString().padStart(2, '0')}`
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data as T;
 }
 
-// Sample data for demo/preview mode (when API key unavailable)
-const SAMPLE_VIDEOS: Video[] = [
-  { rank: 1, id: 'dQw4w9WgXcQ', video_id: 'dQw4w9WgXcQ', title: '🎵 熱門音樂 MV - 永遠經典', channel: '官方頻道', views: 12500000, views_formatted: '12.5M', likes: 890000, likes_formatted: '890K', comments: 45000, comments_formatted: '45K', duration: '3:04', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg', hot_score: 15670, collected_at: new Date().toISOString() },
-  { rank: 2, id: 'sample2', video_id: 'sample2', title: '🔥 遊戲實況 - 最新熱門影片', channel: '遊戲達人', views: 8900000, views_formatted: '8.9M', likes: 560000, likes_formatted: '560K', comments: 32000, comments_formatted: '32K', duration: '45:30', url: 'https://www.youtube.com/watch?v=sample2', thumbnail: 'https://img.youtube.com/vi/sample2/hqdefault.jpg', hot_score: 9860, collected_at: new Date().toISOString() },
-  { rank: 3, id: 'sample3', video_id: 'sample3', title: '📱 科技評測 - 新品開箱', channel: '科技先生', views: 5600000, views_formatted: '5.6M', likes: 340000, likes_formatted: '340K', comments: 18000, comments_formatted: '18K', duration: '18:22', url: 'https://www.youtube.com/watch?v=sample3', thumbnail: 'https://img.youtube.com/vi/sample3/hqdefault.jpg', hot_score: 6140, collected_at: new Date().toISOString() },
-  { rank: 4, id: 'sample4', video_id: 'sample4', title: '🍜 美食探店 - 在地推薦', channel: '吃貨世界', views: 3200000, views_formatted: '3.2M', likes: 210000, likes_formatted: '210K', comments: 12000, comments_formatted: '12K', duration: '12:45', url: 'https://www.youtube.com/watch?v=sample4', thumbnail: 'https://img.youtube.com/vi/sample4/hqdefault.jpg', hot_score: 3680, collected_at: new Date().toISOString() },
-  { rank: 5, id: 'sample5', video_id: 'sample5', title: '📚 知識分享 - 必學技巧', channel: '學習頻道', views: 2100000, views_formatted: '2.1M', likes: 180000, likes_formatted: '180K', comments: 9500, comments_formatted: '9.5K', duration: '22:10', url: 'https://www.youtube.com/watch?v=sample5', thumbnail: 'https://img.youtube.com/vi/sample5/hqdefault.jpg', hot_score: 2610, collected_at: new Date().toISOString() },
-]
-
-function getDemoTrending(region: string): Video[] {
-  return SAMPLE_VIDEOS.map((v, i) => ({
-    ...v,
-    collected_at: new Date().toISOString(),
-    rank: i + 1,
-  }))
+function setCache(key: string, data: unknown) {
+  cache.set(key, { data, timestamp: Date.now() });
 }
 
-export async function GET() {
+async function fetchVideoDetails(ids: string[]): Promise<YouTubeVideo[]> {
+  if (!ids.length) return [];
+  const results: YouTubeVideo[] = [];
+  // Batch in groups of 50 (YouTube API limit)
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const params = new URLSearchParams({
+      key: API_KEY!,
+      part: "snippet,statistics,contentDetails",
+      id: batch.join(","),
+    });
+    const res = await fetch(`${BASE_URL}/videos?${params}`);
+    if (!res.ok) continue;
+    const data = await res.json();
+    results.push(...(data.items || []));
+  }
+  return results;
+}
+
+async function fetchTrendingVideos(region: string, category: string, pageToken?: string): Promise<{ items: YouTubeVideo[]; nextPageToken?: string }> {
+  const params = new URLSearchParams({
+    key: API_KEY!,
+    part: "snippet,statistics",
+    chart: "mostPopular",
+    regionCode: region,
+    maxResults: "20",
+  });
+  if (category) params.set("videoCategoryId", category);
+  if (pageToken) params.set("pageToken", pageToken);
+
+  const res = await fetch(`${BASE_URL}/videos?${params}`);
+  if (!res.ok) throw new Error(`YouTube API error: ${res.status}`);
+  const data = await res.json();
+  return { items: data.items || [], nextPageToken: data.nextPageToken };
+}
+
+async function searchVideos(query: string, region: string, pageToken?: string): Promise<{ items: YouTubeVideo[]; nextPageToken?: string }> {
+  const params = new URLSearchParams({
+    key: API_KEY!,
+    part: "snippet",
+    type: "video",
+    q: query,
+    regionCode: region,
+    maxResults: "20",
+    relevanceLanguage: region === "TW" ? "zh" : "en",
+  });
+  if (pageToken) params.set("pageToken", pageToken);
+
+  const res = await fetch(`${BASE_URL}/search?${params}`);
+  if (!res.ok) throw new Error(`YouTube Search API error: ${res.status}`);
+  const data = await res.json();
+
+  // Fetch video details for statistics
+  const videoIds = (data.items || []).map((item: { id: { videoId: string } }) => item.id.videoId).filter(Boolean);
+  const details = await fetchVideoDetails(videoIds);
+
+  return { items: details, nextPageToken: data.nextPageToken };
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const region = searchParams.get("region") || "TW";
+  const category = searchParams.get("category") || "";
+  const search = (searchParams.get("search") || "").trim();
+  const pageToken = searchParams.get("pageToken") || undefined;
+
+  const cacheKey = `trending:${region}:${category}:${search}:${pageToken || "first"}`;
+  const cached = getCached<VideoItem[]>(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached);
+  }
+
+  if (!API_KEY) {
+    return NextResponse.json({ error: "YOUTUBE_API_KEY not configured" }, { status: 500 });
+  }
+
   try {
-    if (!YOUTUBE_API_KEY) {
-      // Return demo data instead of empty state
-      const demoTrending = getDemoTrending(REGION)
-      return NextResponse.json({
-        success: true,
-        trending: demoTrending,
-        total: demoTrending.length,
-        last_update: new Date().toISOString(),
-        demo: true,
-      })
+    let rawVideos: YouTubeVideo[] = [];
+    let nextPageToken: string | undefined;
+
+    if (search) {
+      // Keyword search via YouTube Search API
+      const result = await searchVideos(search, region, pageToken);
+      rawVideos = result.items;
+      nextPageToken = result.nextPageToken;
+    } else {
+      // Trending videos via mostPopular endpoint
+      const result = await fetchTrendingVideos(region, category, pageToken);
+      rawVideos = result.items;
+      nextPageToken = result.nextPageToken;
     }
 
-    const trendingRes = await axios.get(
-      'https://www.googleapis.com/youtube/v3/videos',
-      {
-        params: {
-          part: 'snippet,statistics,contentDetails',
-          chart: 'mostPopular',
-          regionCode: REGION,
-          maxResults: 20,
-          key: YOUTUBE_API_KEY,
-        },
-        timeout: 10000,
-      }
-    )
+    // Build VideoItem array
+    let videos: VideoItem[] = rawVideos.map((v, idx) => ({
+      id: v.id,
+      title: v.snippet.title,
+      channel: v.snippet.channelTitle,
+      channelId: v.snippet.channelId,
+      thumbnail: v.snippet.thumbnails.high?.url || v.snippet.thumbnails.medium?.url || "",
+      views: v.statistics?.viewCount || "0",
+      likes: v.statistics?.likeCount || "0",
+      comments: v.statistics?.commentCount || "0",
+      publishedAt: v.snippet.publishedAt,
+      trendingRank: idx + 1,
+      categoryId: v.snippet.categoryId,
+      description: v.snippet.description,
+    }));
 
-    const items = trendingRes.data.items || []
-    const now = new Date().toISOString()
+    setCache(cacheKey, videos);
 
-    const trending: Video[] = items.map((item: any, i: number) => {
-      const stats = item.statistics || {}
-      const snippet = item.snippet || {}
-      const details = item.contentDetails || {}
-
-      const views = parseInt(stats.viewCount || '0')
-      const likes = parseInt(stats.likeCount || '0')
-      const comments = parseInt(stats.commentCount || '0')
-      const hot_score = Math.round((views * 1 + likes * 3 + comments * 5) / 1000)
-
-      return {
-        rank: i + 1,
-        id: item.id,
-        video_id: item.id,
-        title: snippet.title || '無標題',
-        channel: snippet.channelTitle || '未知頻道',
-        views,
-        views_formatted: formatViewCount(views),
-        likes,
-        likes_formatted: formatViewCount(likes),
-        comments,
-        comments_formatted: formatViewCount(comments),
-        duration: formatDuration(details.duration || ''),
-        url: `https://www.youtube.com/watch?v=${item.id}`,
-        thumbnail: snippet.thumbnails?.high?.url
-          || snippet.thumbnails?.medium?.url
-          || snippet.thumbnails?.default?.url
-          || `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
-        hot_score,
-        collected_at: now,
-      }
-    })
-
-    trending.sort((a, b) => b.hot_score - a.hot_score)
-    trending.forEach((v, i) => { v.rank = i + 1 })
-
-    return NextResponse.json({
-      success: true,
-      trending,
-      total: trending.length,
-      last_update: now,
-    })
-  } catch (error: any) {
-    console.error('YouTube API error:', error?.response?.data || error.message)
-    // Fall back to demo data on error
-    const demoTrending = getDemoTrending(REGION)
-    return NextResponse.json({
-      success: true,
-      trending: demoTrending,
-      total: demoTrending.length,
-      last_update: new Date().toISOString(),
-      demo: true,
-      api_error: error.message,
-    })
+    return NextResponse.json(videos);
+  } catch (err) {
+    console.error("Trending API error:", err);
+    return NextResponse.json({ error: "Failed to fetch videos" }, { status: 500 });
   }
 }

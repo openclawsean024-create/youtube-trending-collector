@@ -1,213 +1,530 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from "react";
 
-interface Video {
-  rank: number
-  id: string
-  video_id: string
-  title: string
-  channel: string
-  views: number
-  views_formatted: string
-  likes: number
-  likes_formatted: string
-  comments: number
-  comments_formatted: string
-  duration: string
-  url: string
-  thumbnail: string
-  hot_score: number
-  collected_at: string
+interface VideoItem {
+  id: string;
+  title: string;
+  channel: string;
+  channelId: string;
+  thumbnail: string;
+  views: string;
+  likes: string;
+  comments: string;
+  publishedAt: string;
+  trendingRank: number;
+  categoryId: string;
+  description: string;
 }
 
-interface Config {
-  telegram_bot_token: string
-  telegram_bot_token_set: boolean
-  telegram_chat_id: string
-  telegram_chat_id_set: boolean
-  region: string
-  category: string
-  max_videos: number
-  min_views: number
-  post_time: string
+type SortKey = "trendingRank" | "views" | "likes" | "publishedAt";
+type SortDir = "asc" | "desc";
+
+const REGIONS = [
+  { code: "TW", label: "台灣" },
+  { code: "US", label: "美國" },
+  { code: "JP", label: "日本" },
+  { code: "KR", label: "南韓" },
+  { code: "HK", label: "香港" },
+];
+
+const CATEGORIES = [
+  { id: "", label: "所有類別" },
+  { id: "10", label: "音樂" },
+  { id: "20", label: "遊戲" },
+  { id: "22", label: "戶外活動" },
+  { id: "23", label: "喜劇" },
+  { id: "24", label: "娛樂" },
+  { id: "25", label: "新聞" },
+  { id: "27", label: "寵物與動物" },
+  { id: "28", label: "科學與技術" },
+  { id: "17", label: "體育" },
+  { id: "19", label: "電影與動畫" },
+  { id: "43", label: "節目" },
+];
+
+function formatViews(n: string) {
+  const num = Number(n);
+  if (isNaN(num)) return "0";
+  if (num >= 10_000_000) return (num / 10_000_000).toFixed(1) + "億次觀看";
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M次觀看";
+  if (num >= 1_000) return (num / 1_000).toFixed(1) + "K次觀看";
+  return num.toLocaleString() + "次觀看";
 }
 
-interface TrendingResponse {
-  success: boolean
-  trending: Video[]
-  total: number
-  last_update: string | null
-  error?: string
+function timeAgo(dateStr: string) {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = Math.floor((now - then) / 1000);
+  if (diff < 60) return `${diff} 秒前`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分鐘前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小時前`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)} 天前`;
+  if (diff < 31536000) return `${Math.floor(diff / 2592000)} 個月前`;
+  return `${Math.floor(diff / 31536000)} 年前`;
 }
 
-interface ConfigResponse {
-  success: boolean
-  config: Config
+function SkeletonCard() {
+  return (
+    <div className="bg-white rounded-xl overflow-hidden border border-[#e5e5e5]">
+      <div className="skeleton w-full aspect-video bg-[#e5e5e5]" />
+      <div className="p-3 space-y-2">
+        <div className="skeleton h-4 bg-[#e5e5e5] rounded w-3/4" />
+        <div className="skeleton h-3 bg-[#e5e5e5] rounded w-1/2" />
+        <div className="skeleton h-3 bg-[#e5e5e5] rounded w-2/3" />
+      </div>
+    </div>
+  );
 }
 
-export default function Dashboard() {
-  const [videos, setVideos] = useState<Video[]>([])
-  const [config, setConfig] = useState<Config | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [collecting, setCollecting] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null)
-  const [totalVideos, setTotalVideos] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'trending' | 'config'>('trending')
-  const [notification, setNotification] = useState<string | null>(null)
-  const [editCategory, setEditCategory] = useState('All')
-  const [editMinViews, setEditMinViews] = useState(100000)
-  const [editRegion, setEditRegion] = useState('TW')
-  const [editMaxVideos, setEditMaxVideos] = useState(20)
-  const [editPostTime, setEditPostTime] = useState('20:00')
-  const [editTelegramBotToken, setEditTelegramBotToken] = useState('')
-  const [editTelegramChatId, setEditTelegramChatId] = useState('')
+function VideoCard({ video, index }: { video: VideoItem; index: number }) {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  const showNotification = (msg: string) => {
-    setNotification(msg)
-    setTimeout(() => setNotification(null), 3000)
-  }
-
-  const saveConfig = async () => {
-    try {
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          telegram_bot_token: editTelegramBotToken,
-          telegram_chat_id: editTelegramChatId,
-          region: editRegion,
-          category: editCategory,
-          max_videos: Number(editMaxVideos),
-          min_views: Number(editMinViews),
-          post_time: editPostTime,
-        }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        setConfig(data.config)
-        showNotification('設定已儲存 ✅')
-      } else {
-        showNotification('儲存失敗：' + (data.error || '未知錯誤'))
-      }
-    } catch {
-      showNotification('儲存失敗，請稍後再試')
-    }
-  }
-
-  const fetchTrending = useCallback(async () => {
-    try {
-      const res = await fetch('/api/trending')
-      const data: TrendingResponse = await res.json()
-      if (data.success) {
-        setVideos(data.trending)
-        setLastUpdate(data.last_update)
-        setTotalVideos(data.total)
-        setError(null)
-      } else {
-        setError(data.error || 'Failed to fetch trending')
-      }
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const fetchConfig = useCallback(async () => {
-    try {
-      const res = await fetch('/api/config')
-      const data: ConfigResponse = await res.json()
-      if (data.success) {
-        setConfig(data.config)
-        setEditCategory(data.config.category)
-        setEditMinViews(data.config.min_views)
-        setEditRegion(data.config.region)
-        setEditMaxVideos(data.config.max_videos)
-        setEditPostTime(data.config.post_time)
-        setEditTelegramChatId(data.config.telegram_chat_id_set ? data.config.telegram_chat_id : '')
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  const handleCollect = async () => {
-    setCollecting(true)
-    try {
-      const res = await fetch('/api/collect', { method: 'POST' })
-      const data = await res.json()
-      if (data.success) {
-        showNotification(data.message || '收集完成！')
-        await fetchTrending()
-      } else {
-        showNotification(`收集失敗: ${data.error}`)
-      }
-    } catch (e: any) {
-      showNotification(`收集失敗: ${e.message}`)
-    } finally {
-      setCollecting(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchTrending()
-    fetchConfig()
-    const interval = setInterval(fetchTrending, 60000)
-    return () => clearInterval(interval)
-  }, [fetchTrending, fetchConfig])
-
-  const formatTime = (iso: string | null) => {
-    if (!iso) return '從未'
-    const d = new Date(iso)
-    return d.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
-  }
-
-  const getRankEmoji = (rank: number) => {
-    if (rank === 1) return '🥇'
-    if (rank === 2) return '🥈'
-    if (rank === 3) return '🥉'
-    return <span className="text-gray-500 font-bold">#{rank}</span>
-  }
+  const handleCopyLink = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.clipboard.writeText(`https://youtube.com/watch?v=${video.id}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f]">
-      {notification && <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse">{notification}</div>}
-      <header className="bg-[#1a1a1a] border-b border-[#333] sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">YouTube 熱門收集器</h1>
-                <p className="text-xs text-gray-400">自動收集 · Telegram 發送</p>
-              </div>
-            </div>
-            <button onClick={handleCollect} disabled={collecting} className="bg-red-600 hover:bg-red-700 disabled:bg-red-800 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2">{collecting ? <>收集中...</> : <>立即收集</>}</button>
-          </div>
-          <div className="flex gap-1 mt-4">
-            <button onClick={() => setActiveTab('trending')} className={`px-4 py-2 text-sm font-medium rounded-lg ${activeTab === 'trending' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-[#272727]'}`}>📊 熱門排行</button>
-            <button onClick={() => setActiveTab('config')} className={`px-4 py-2 text-sm font-medium rounded-lg ${activeTab === 'config' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-[#272727]'}`}>⚙️ 配置狀態</button>
+    <div className="group">
+      {/* Thumbnail */}
+      <div className="relative">
+        <a
+          href={`https://youtube.com/watch?v=${video.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block"
+        >
+          <img
+            src={video.thumbnail}
+            alt={video.title}
+            className="w-full aspect-video object-cover rounded-xl bg-[#e5e5e5] group-hover:rounded-none transition-all duration-200"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9' fill='%23e5e5e5'%3E%3Crect width='16' height='9' fill='%23e5e5e5'/%3E%3C/svg%3E";
+            }}
+          />
+        </a>
+        <span className="absolute bottom-1.5 right-1.5 bg-black text-white text-xs px-1.5 py-0.5 rounded font-medium">
+          #{index + 1}
+        </span>
+      </div>
+
+      {/* Info */}
+      <div className="flex gap-2 mt-2 px-1">
+        <div className="flex-1 min-w-0">
+          <a
+            href={`https://youtube.com/watch?v=${video.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block"
+          >
+            <h3 className="text-sm font-medium text-[#0f0f0f] leading-snug line-clamp-2 group-hover:text-[#ff0000] transition-colors">
+              {video.title}
+            </h3>
+          </a>
+          <p className="text-xs text-[#606060] mt-1 truncate">{video.channel}</p>
+          <p className="text-xs text-[#606060]">
+            {formatViews(video.views)} · {timeAgo(video.publishedAt)}
+          </p>
+
+          {/* Expandable description */}
+          {expanded && video.description && (
+            <p className="text-xs text-[#606060] mt-2 leading-relaxed border-t border-[#e5e5e5] pt-2">
+              {video.description.slice(0, 300)}
+              {video.description.length > 300 ? "..." : ""}
+            </p>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              onClick={handleCopyLink}
+              className="text-xs text-[#606060] hover:text-[#ff0000] transition-colors flex items-center gap-1"
+            >
+              {copied ? "✅ 已複製" : "🔗 複製連結"}
+            </button>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-xs text-[#606060] hover:text-[#ff0000] transition-colors"
+            >
+              {expanded ? "▲ 收起" : "▼ 詳情"}
+            </button>
+            <a
+              href={`https://youtube.com/watch?v=${video.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-[#606060] hover:text-[#ff0000] transition-colors flex items-center gap-1 ml-auto"
+            >
+              ▶ YouTube
+            </a>
           </div>
         </div>
-      </header>
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {error && <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {error}</div>}
-        {activeTab === 'trending' && <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="stat-card rounded-xl p-4"><p className="text-gray-400 text-xs mb-1">總影片數</p><p className="text-2xl font-bold text-white">{totalVideos}</p></div>
-            <div className="stat-card rounded-xl p-4"><p className="text-gray-400 text-xs mb-1">顯示熱門</p><p className="text-2xl font-bold text-white">{videos.length}</p></div>
-            <div className="stat-card rounded-xl p-4"><p className="text-gray-400 text-xs mb-1">最後更新</p><p className="text-sm font-medium text-white">{formatTime(lastUpdate)}</p></div>
-            <div className="stat-card rounded-xl p-4"><p className="text-gray-400 text-xs mb-1">地區</p><p className="text-2xl font-bold text-white">{config?.region || 'TW'}</p></div>
-          </div>
-          {loading ? <div className="flex items-center justify-center py-20"><div className="animate-spin w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full"/><span className="ml-3 text-gray-400">載入中...</span></div> : videos.length === 0 ? <div className="text-center py-20"><p className="text-gray-400 mb-4">目前沒有熱門影片</p><button onClick={handleCollect} disabled={collecting} className="btn-primary">點擊收集</button></div> : <div className="space-y-3">{videos.map((video) => <div key={video.id} className="video-card bg-[#1a1a1a] border border-[#272727] rounded-xl p-4 flex gap-4"><div className="flex items-center justify-center w-8 shrink-0"><span className="text-xl">{getRankEmoji(video.rank)}</span></div><div className="shrink-0"><a href={video.url} target="_blank" rel="noopener noreferrer"><img src={video.thumbnail} alt={video.title} className="w-36 h-20 object-cover rounded-lg bg-[#272727]" onError={(e) => {(e.target as HTMLImageElement).style.display = 'none'}} /></a></div><div className="flex-1 min-w-0"><a href={video.url} target="_blank" rel="noopener noreferrer" className="text-white font-semibold text-sm hover:text-red-500 transition-colors line-clamp-2">{video.title}</a><p className="text-gray-400 text-xs mt-1">{video.channel}</p><div className="flex items-center gap-4 mt-2 text-xs text-gray-400"><span>👀 {video.views_formatted}</span><span>👍 {video.likes_formatted}</span><span>💬 {video.comments_formatted}</span><span>⏱️ {video.duration}</span><span className="bg-red-900/30 text-red-400 px-2 py-0.5 rounded text-xs font-semibold">🔥 {video.hot_score}K</span></div></div><div className="shrink-0 flex items-center"><a href={video.url} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-red-500 transition-colors" title="在 YouTube 開啟">↗</a></div></div>)}</div>}
-        </>}
-        {activeTab === 'config' && <div className="max-w-2xl"><div className="bg-[#1a1a1a] border border-[#272727] rounded-xl p-6"><h2 className="text-lg font-bold text-white mb-6">⚙️ 配置狀態</h2><div className="space-y-4"><div className="flex items-center justify-between py-3 border-b border-[#272727]"><div><p className="text-white font-medium">地區</p><p className="text-xs text-gray-500 mt-0.5">YouTube 熱門的地區</p></div><input className="bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5 w-32" value={editRegion} onChange={e => setEditRegion(e.target.value)} /></div><div className="flex items-center justify-between py-3 border-b border-[#272727]"><div><p className="text-white font-medium">分類</p><p className="text-xs text-gray-500 mt-0.5">影片分類（影響收集範圍）</p></div><select value={editCategory} onChange={e => setEditCategory(e.target.value)} className="bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5"><option value="All">All</option><option value="Music">音樂</option><option value="Gaming">遊戲</option><option value="News">新聞</option><option value="Movies">電影</option><option value="Sports">體育</option><option value="Comedy">喜劇</option><option value="Entertainment">娛樂</option><option value="Science">科學</option><option value="Technology">科技</option><option value="Education">教育</option></select></div><div className="flex items-center justify-between py-3 border-b border-[#272727]"><div><p className="text-white font-medium">最少觀看次數</p><p className="text-xs text-gray-500 mt-0.5">只收集超過此觀看數的影片</p></div><input type="number" value={editMinViews} onChange={e => setEditMinViews(Number(e.target.value))} min={0} className="w-36 bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5" /></div><div className="flex items-center justify-between py-3 border-b border-[#272727]"><div><p className="text-white font-medium">最大影片數</p><p className="text-xs text-gray-500 mt-0.5">每次收集的影片上限</p></div><input type="number" value={editMaxVideos} onChange={e => setEditMaxVideos(Number(e.target.value))} min={1} className="w-36 bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5" /></div><div className="flex items-center justify-between py-3 border-b border-[#272727]"><div><p className="text-white font-medium">Telegram Bot Token</p><p className="text-xs text-gray-500 mt-0.5">用於發送訊息到 Telegram 群組</p></div><input className="bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5 w-64" value={editTelegramBotToken} onChange={e => setEditTelegramBotToken(e.target.value)} placeholder="保持空白代表不修改" /></div><div className="flex items-center justify-between py-3 border-b border-[#272727]"><div><p className="text-white font-medium">Telegram Chat ID</p><p className="text-xs text-gray-500 mt-0.5">目標群組或頻道的 ID</p></div><input className="bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5 w-64" value={editTelegramChatId} onChange={e => setEditTelegramChatId(e.target.value)} placeholder="例如 -1001234567890" /></div><div className="flex items-center justify-between py-3"><div><p className="text-white font-medium">每日發送時間</p><p className="text-xs text-gray-500 mt-0.5">自動發送到 Telegram 的時間</p></div><input className="bg-[#272727] text-white text-sm border border-[#3a3a3a] rounded-lg px-3 py-1.5 w-32" value={editPostTime} onChange={e => setEditPostTime(e.target.value)} /></div><button onClick={saveConfig} className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors">儲存設定</button></div></div></div>}
-      </main>
-      <footer className="border-t border-[#272727] mt-8 py-6"><div className="max-w-7xl mx-auto px-4 text-center text-gray-500 text-xs"><p>YouTube Trending Collector · 自動收集 · Telegram 發送</p><p className="mt-1">更新時間：{formatTime(lastUpdate)}</p></div></footer>
+      </div>
     </div>
-  )
+  );
+}
+
+function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 3000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white ${type === "success" ? "bg-[#282828]" : "bg-red-600"} toast-enter`}>
+      {message}
+    </div>
+  );
+}
+
+// YouTube sidebar icons as inline SVG
+const HomeIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+  </svg>
+);
+const TrendingIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.55 11.2c-.23-.3-.5-.56-.76-.82-.65-.6-1.4-1.03-2.03-1.66-1.46-1.46-1.78-3.87-.85-5.72-.9.23-1.75.75-2.45 1.32C8.9 6.4 7.9 10.07 9.1 13.22c.04.1.08.2.08.33 0 .22-.15.42-.35.5-.22.1-.46.04-.64-.12-.06-.05-.1-.1-.15-.17-1.1-1.43-1.28-3.48-.53-5.12C5.89 10 5 12.3 5.14 14.47c.04.5.1 1 .27 1.5.14.6.4 1.2.72 1.73 1.04 1.73 2.87 2.97 4.84 3.22 2.1.27 4.35-.12 5.96-1.6 1.8-1.66 2.45-4.32 1.5-6.6l-.13-.26c-.2-.46-.47-.87-.8-1.25z" />
+  </svg>
+);
+const SettingsIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.37 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" />
+  </svg>
+);
+
+export default function HomePage() {
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [region, setRegion] = useState("TW");
+  const [category, setCategory] = useState("");
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("trendingRank");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [notifyLoading, setNotifyLoading] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load settings from /api/config
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data: {
+        defaultRegion?: string;
+        defaultCategory?: string;
+        telegramBotToken?: string;
+        telegramChatId?: string;
+      }) => {
+        if (data.defaultRegion) setRegion(data.defaultRegion);
+        if (data.defaultCategory !== undefined) setCategory(data.defaultCategory);
+        if (data.telegramBotToken) setTelegramBotToken(data.telegramBotToken);
+        if (data.telegramChatId) setTelegramChatId(data.telegramChatId);
+        setSettingsLoaded(true);
+      })
+      .catch(() => setSettingsLoaded(true));
+  }, []);
+
+  const fetchVideos = useCallback(async (overrideSearch?: string) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ region });
+      if (category) params.set("category", category);
+      const q = overrideSearch !== undefined ? overrideSearch : search;
+      if (q) params.set("search", q);
+      const res = await fetch(`/api/trending?${params}`);
+      if (!res.ok) throw new Error("Fetch failed");
+      const data = await res.json();
+      setVideos(Array.isArray(data) ? data : []);
+    } catch {
+      setToast({ message: "⚠️ 無法載入影片，請確認 API Key 已設定", type: "error" });
+      setVideos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [region, category, search]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    fetchVideos();
+  }, [settingsLoaded, fetchVideos]);
+
+  // Debounced search
+  const handleSearchChange = (val: string) => {
+    setSearchInput(val);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      setSearch(val);
+    }, 600);
+  };
+
+  const handleRegionChange = (r: string) => {
+    setRegion(r);
+    setSearch("");
+    setSearchInput("");
+  };
+
+  const sortedVideos = [...videos].sort((a, b) => {
+    let aVal: number | string = 0;
+    let bVal: number | string = 0;
+    if (sortKey === "trendingRank") { aVal = a.trendingRank; bVal = b.trendingRank; }
+    else if (sortKey === "views") { aVal = Number(a.views); bVal = Number(b.views); }
+    else if (sortKey === "likes") { aVal = Number(a.likes); bVal = Number(b.likes); }
+    else { aVal = new Date(a.publishedAt).getTime(); bVal = new Date(b.publishedAt).getTime(); }
+    return sortDir === "asc" ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+  });
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
+  };
+
+  const downloadFile = async (format: "csv" | "xlsx") => {
+    const res = await fetch("/api/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videos: sortedVideos, format }),
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `youtube-trending.${format === "xlsx" ? "xlsx" : "csv"}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const sendTelegram = async () => {
+    if (!telegramBotToken || !telegramChatId) {
+      setToast({ message: "⚠️ 請先在設定頁填入 Telegram Bot Token 和 Chat ID", type: "error" });
+      return;
+    }
+    setNotifyLoading(true);
+    try {
+      const res = await fetch("/api/telegram-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ botToken: telegramBotToken, chatId: telegramChatId, videos: sortedVideos }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setToast({ message: `✅ 已發送 ${data.notified} 部影片到 Telegram！`, type: "success" });
+      } else {
+        setToast({ message: `⚠️ ${data.error}`, type: "error" });
+      }
+    } catch {
+      setToast({ message: "⚠️ 發送失敗", type: "error" });
+    } finally {
+      setNotifyLoading(false);
+    }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) =>
+    sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+
+  const sortButtons: { key: SortKey; label: string }[] = [
+    { key: "trendingRank", label: "排名" },
+    { key: "views", label: "觀看" },
+    { key: "likes", label: "按讚" },
+    { key: "publishedAt", label: "發布" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#f9f9f9] text-[#0f0f0f] flex flex-col">
+      {/* ===== HEADER ===== */}
+      <header className="sticky top-0 z-50 bg-white border-b border-[#e5e5e5] h-14 flex items-center px-4 gap-4">
+        {/* Left: hamburger + logo */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 hover:bg-[#f2f2f2] rounded-full transition-colors"
+            aria-label="切換側邊欄"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+            </svg>
+          </button>
+          <a href="/" className="flex items-center gap-1 flex-shrink-0">
+            <svg width="28" height="20" viewBox="0 0 24 24" fill="#FF0000">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+            </svg>
+            <span className="font-bold text-base tracking-tight">熱門蒐集器</span>
+          </a>
+        </div>
+
+        {/* Center: search bar */}
+        <div className="flex-1 flex justify-center max-w-2xl mx-auto">
+          <div className="flex w-full max-w-[600px]">
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="搜尋影片..."
+              className="flex-1 border border-[#d3d3d3] rounded-l-full px-4 py-1.5 text-sm focus:outline-none focus:border-[#1a73e8] bg-white"
+            />
+            <button
+              onClick={() => setSearch(searchInput)}
+              className="border border-[#d3d3d3] border-l-0 rounded-r-full px-5 py-1.5 bg-[#f8f8f8] hover:bg-[#f0f0f0] transition-colors flex-shrink-0"
+              aria-label="搜尋"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#606060">
+                <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Right: settings */}
+        <div className="flex-shrink-0 flex items-center gap-2">
+          <a
+            href="/settings"
+            className="p-2 hover:bg-[#f2f2f2] rounded-full transition-colors"
+            aria-label="設定"
+          >
+            <SettingsIcon />
+          </a>
+        </div>
+      </header>
+
+      <div className="flex flex-1">
+        {/* ===== SIDEBAR ===== */}
+        <aside className={`bg-white border-r border-[#e5e5e5] flex-shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-52" : "w-0"}`}>
+          <nav className="pt-2">
+            <a href="/" className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#0f0f0f] font-medium">
+              <HomeIcon />
+              <span>首頁</span>
+            </a>
+            <div className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#0f0f0f] font-medium">
+              <TrendingIcon />
+              <span>熱門</span>
+            </div>
+            <hr className="my-2 border-[#e5e5e5]" />
+            <div className="px-6 py-1.5 text-xs text-[#606060] font-semibold uppercase tracking-wider">地區</div>
+            {REGIONS.map((r) => (
+              <button
+                key={r.code}
+                onClick={() => handleRegionChange(r.code)}
+                className={`w-full sidebar-item flex items-center gap-6 px-6 py-2 text-sm transition-colors ${region === r.code ? "font-medium" : "text-[#606060]"}`}
+              >
+                <span className="w-6 text-center">📍</span>
+                <span>{r.label}</span>
+              </button>
+            ))}
+            <hr className="my-2 border-[#e5e5e5]" />
+            <a
+              href="/settings"
+              className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#606060]"
+            >
+              <SettingsIcon />
+              <span>設定</span>
+            </a>
+          </nav>
+        </aside>
+
+        {/* ===== MAIN CONTENT ===== */}
+        <main className="flex-1 min-w-0">
+          {/* Filter bar */}
+          <div className="bg-white border-b border-[#e5e5e5] px-6 py-3 flex flex-wrap gap-3 items-center">
+            <select
+              value={region}
+              onChange={(e) => handleRegionChange(e.target.value)}
+              className="border border-[#d3d3d3] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-[#1a73e8] cursor-pointer"
+            >
+              {REGIONS.map((r) => (
+                <option key={r.code} value={r.code}>{r.label}</option>
+              ))}
+            </select>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="border border-[#d3d3d3] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-[#1a73e8] cursor-pointer"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+            <div className="ml-auto flex items-center gap-2 text-xs text-[#606060]">
+              {search && <span>🔍 搜尋：{search}</span>}
+              <span>{sortedVideos.length} 部影片</span>
+            </div>
+          </div>
+
+          {/* Sort buttons */}
+          <div className="bg-white border-b border-[#e5e5e5] px-6 py-2 flex flex-wrap gap-2">
+            {sortButtons.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => handleSort(key)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${sortKey === key ? "border-[#ff0000] text-[#ff0000] font-medium" : "border-[#d3d3d3] text-[#606060] hover:border-[#999]"}`}
+              >
+                {label}<SortIcon col={key} />
+              </button>
+            ))}
+
+            {/* Export + Telegram */}
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => downloadFile("csv")}
+                className="text-xs px-3 py-1 rounded-full border border-[#d3d3d3] text-[#606060] hover:bg-[#f2f2f2] transition-colors"
+              >
+                📄 CSV
+              </button>
+              <button
+                onClick={() => downloadFile("xlsx")}
+                className="text-xs px-3 py-1 rounded-full border border-[#d3d3d3] text-[#606060] hover:bg-[#f2f2f2] transition-colors"
+              >
+                📊 Excel
+              </button>
+              <button
+                onClick={sendTelegram}
+                disabled={notifyLoading}
+                className="text-xs px-3 py-1 rounded-full border border-[#d3d3d3] text-[#606060] hover:bg-[#f2f2f2] transition-colors disabled:opacity-50"
+              >
+                {notifyLoading ? "📤 傳送中..." : "📨 Telegram"}
+              </button>
+            </div>
+          </div>
+
+          {/* Video grid */}
+          <div className="p-6">
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            ) : sortedVideos.length === 0 ? (
+              <div className="text-center py-24 text-[#606060]">
+                <div className="text-5xl mb-4">📭</div>
+                <p className="text-base font-medium text-[#0f0f0f] mb-2">尚無收集記錄</p>
+                <p className="text-sm">選擇地區或類別後點擊「更新」以抓取熱門影片</p>
+                <p className="text-xs mt-1 text-[#909090]">請確認 YOUTUBE_API_KEY 環境變數已設定</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+                {sortedVideos.map((video, i) => (
+                  <VideoCard key={video.id} video={video} index={i} />
+                ))}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+    </div>
+  );
 }
