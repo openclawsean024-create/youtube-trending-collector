@@ -214,23 +214,17 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load settings from /api/config
+  // Load settings from localStorage
   useEffect(() => {
-    fetch("/api/config")
-      .then((r) => r.json())
-      .then((data: {
-        defaultRegion?: string;
-        defaultCategory?: string;
-        telegramBotToken?: string;
-        telegramChatId?: string;
-      }) => {
-        if (data.defaultRegion) setRegion(data.defaultRegion);
-        if (data.defaultCategory !== undefined) setCategory(data.defaultCategory);
-        if (data.telegramBotToken) setTelegramBotToken(data.telegramBotToken);
-        if (data.telegramChatId) setTelegramChatId(data.telegramChatId);
-        setSettingsLoaded(true);
-      })
-      .catch(() => setSettingsLoaded(true));
+    const savedRegion = localStorage.getItem('yt-region');
+    const savedCategory = localStorage.getItem('yt-category');
+    const savedTelegramBotToken = localStorage.getItem('yt-telegram-bot-token');
+    const savedTelegramChatId = localStorage.getItem('yt-telegram-chat-id');
+    if (savedRegion) setRegion(savedRegion);
+    if (savedCategory !== null) setCategory(savedCategory);
+    if (savedTelegramBotToken) setTelegramBotToken(savedTelegramBotToken);
+    if (savedTelegramChatId) setTelegramChatId(savedTelegramChatId);
+    setSettingsLoaded(true);
   }, []);
 
   const fetchVideos = useCallback(async (overrideSearch?: string) => {

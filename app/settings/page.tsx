@@ -85,17 +85,18 @@ export default function SettingsPage() {
   const [apiStatus, setApiStatus] = useState<{ hasApiKey: boolean } | null>(null);
 
   useEffect(() => {
-    fetch("/api/config")
-      .then((r) => r.json())
-      .then((data: Config) => {
-        setDiscordWebhook(data.discordWebhook || "");
-        setTelegramBotToken(data.telegramBotToken || "");
-        setTelegramChatId(data.telegramChatId || "");
-        setDefaultRegion(data.defaultRegion || "TW");
-        setDefaultCategory(data.defaultCategory || "");
-        setNotifyOnNewVideos(data.notifyOnNewVideos ?? true);
-      })
-      .catch(() => {});
+    const savedDiscord = localStorage.getItem('yt-discord-webhook') || '';
+    const savedTelegramBotToken = localStorage.getItem('yt-telegram-bot-token') || '';
+    const savedTelegramChatId = localStorage.getItem('yt-telegram-chat-id') || '';
+    const savedRegion = localStorage.getItem('yt-region') || 'TW';
+    const savedCategory = localStorage.getItem('yt-category') || '';
+    const savedNotify = localStorage.getItem('yt-notify-on-new');
+    setDiscordWebhook(savedDiscord);
+    setTelegramBotToken(savedTelegramBotToken);
+    setTelegramChatId(savedTelegramChatId);
+    setDefaultRegion(savedRegion);
+    setDefaultCategory(savedCategory);
+    setNotifyOnNewVideos(savedNotify !== 'false');
     fetch("/api/status")
       .then((r) => r.json())
       .then((d) => setApiStatus(d))
@@ -106,26 +107,15 @@ export default function SettingsPage() {
     setLoading(true);
     setToast(null);
     try {
-      const res = await fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          discordWebhook,
-          telegramBotToken,
-          telegramChatId,
-          defaultRegion,
-          defaultCategory,
-          notifyOnNewVideos,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setToast({ message: "✅ 設定已儲存", type: "success" });
-      } else {
-        setToast({ message: `⚠️ ${data.error || "儲存失敗"}`, type: "error" });
-      }
+      localStorage.setItem('yt-discord-webhook', discordWebhook);
+      localStorage.setItem('yt-telegram-bot-token', telegramBotToken);
+      localStorage.setItem('yt-telegram-chat-id', telegramChatId);
+      localStorage.setItem('yt-region', defaultRegion);
+      localStorage.setItem('yt-category', defaultCategory);
+      localStorage.setItem('yt-notify-on-new', String(notifyOnNewVideos));
+      setToast({ message: '✅ 設定已儲存', type: 'success' });
     } catch {
-      setToast({ message: "⚠️ 儲存失敗，請稍後再試", type: "error" });
+      setToast({ message: '⚠️ 儲存失敗，請稍後再試', type: 'error' });
     } finally {
       setLoading(false);
     }
