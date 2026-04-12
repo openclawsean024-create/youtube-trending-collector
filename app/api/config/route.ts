@@ -1,74 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server'
-import * as fs from 'fs'
-import * as path from 'path'
+import { VercelKV } from '@vercel/kv'
 
-const CONFIG_FILE = path.join(process.cwd(), 'youtube_config.json')
+const kv = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
+  ? new VercelKV({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN })
+  : null
+
+const CONFIG_KEY = 'yt-collector:config'
 
 interface Config {
-  telegram_bot_token: string
-  telegram_chat_id: string
-  region: string
-  category: string
-  max_videos: number
-  min_views: number
-  post_time: string
+  telegramBotToken: string
+  telegramChatId: string
+  discordWebhook: string
+  notifyOnNewVideos: boolean
+  defaultRegion: string
+  defaultCategory: string
 }
 
-function loadConfig(): Config {
-  const defaults: Config = {
-    telegram_bot_token: '',
-    telegram_chat_id: '',
-    region: 'TW',
-    category: 'All',
-    max_videos: 20,
-    min_views: 100000,
-    post_time: '20:00',
+function defaults(): Config & Record<string, unknown> {
+  return {
+    telegramBotToken: '',
+    telegramChatId: '',
+    discordWebhook: '',
+    notifyOnNewVideos: true,
+    defaultRegion: 'TW',
+    defaultCategory: '',
+    maxVideos: 20,
+    minViews: 100000,
+    postTime: '20:00',
   }
-  if (!fs.existsSync(CONFIG_FILE)) return defaults
-  try {
-    return { ...defaults, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')) }
-  } catch { return defaults }
 }
 
-function maskConfig(config: Config) {
-  const token = config.telegram_bot_token || ''
+async function loadConfig(): Promise<Record<string, unknown>> {
+  const base = defaults()
+  if (!kv) return base
+  try {
+    const stored = await kv.get<Record<string, unknown>>(CONFIG_KEY)
+    return stored ? { ...base, ...stored } : base
+  } catch {
+    return base
+  }
+}
+
+async function saveConfig(cfg: Record<string, unknown>): Promise<void> {
+  if (!kv) return
+  await kv.set(CONFIG_KEY, cfg)
+}
+
+function maskConfig(config: Record<string, unknown>) {
+  const token = (config.telegramBotToken as string) || ''
   const masked = token.length > 15
     ? token.substring(0, 8) + '...' + token.substring(token.length - 5)
     : token
   return {
     ...config,
-    telegram_bot_token: masked,
-    telegram_bot_token_set: !!token,
-    telegram_chat_id: config.telegram_chat_id || '未設定',
-    telegram_chat_id_set: !!config.telegram_chat_id,
+    telegramBotToken: masked,
+    telegramBotTokenSet: !!token,
+    telegramChatId: config.telegramChatId || '未設定',
+    telegramChatIdSet: !!config.telegramChatId,
   }
 }
 
 export async function GET() {
   try {
-    const config = loadConfig()
-    return NextResponse.json({ success: true, config: maskConfig(config) })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    const config = await loadConfig()
+    return NextResponse.json({ success: true, ...maskConfig(config) })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const config = loadConfig()
+    const config = await loadConfig()
 
-    if (typeof body.telegram_bot_token === 'string') config.telegram_bot_token = body.telegram_bot_token
-    if (typeof body.telegram_chat_id === 'string') config.telegram_chat_id = body.telegram_chat_id
-    if (typeof body.region === 'string') config.region = body.region
-    if (typeof body.category === 'string') config.category = body.category
-    if (typeof body.max_videos === 'number') config.max_videos = body.max_videos
-    if (typeof body.min_views === 'number') config.min_views = body.min_views
-    if (typeof body.post_time === 'string') config.post_time = body.post_time
+    if (typeof body.telegramBotToken === 'string') config.telegramBotToken = body.telegramBotToken
+    if (typeof body.telegramChatId === 'string') config.telegramChatId = body.telegramChatId
+    if (typeof body.discordWebhook === 'string') config.discordWebhook = body.discordWebhook
+    if (typeof body.notifyOnNewVideos === 'boolean') config.notifyOnNewVideos = body.notifyOnNewVideos
+    if (typeof body.defaultRegion === 'string') config.defaultRegion = body.defaultRegion
+    if (typeof body.defaultCategory === 'string') config.defaultCategory = body.defaultCategory
+    if (typeof body.maxVideos === 'number') config.maxVideos = body.maxVideos
+    if (typeof body.minViews === 'number') config.minViews = body.minViews
+    if (typeof body.postTime === 'string') config.postTime = body.postTime
 
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2))
-    return NextResponse.json({ success: true, config: maskConfig(config) })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    await saveConfig(config)
+    return NextResponse.json({ success: true, ...maskConfig(config) })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }

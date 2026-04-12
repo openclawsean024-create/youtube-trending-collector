@@ -66,12 +66,12 @@ function timeAgo(dateStr: string) {
 
 function SkeletonCard() {
   return (
-    <div className="bg-white rounded-xl overflow-hidden border border-[#e5e5e5]">
-      <div className="skeleton w-full aspect-video bg-[#e5e5e5]" />
+    <div className="bg-[#1F2937] rounded-xl overflow-hidden border border-[#374151]">
+      <div className="skeleton w-full aspect-video bg-[#374151]" />
       <div className="p-3 space-y-2">
-        <div className="skeleton h-4 bg-[#e5e5e5] rounded w-3/4" />
-        <div className="skeleton h-3 bg-[#e5e5e5] rounded w-1/2" />
-        <div className="skeleton h-3 bg-[#e5e5e5] rounded w-2/3" />
+        <div className="skeleton h-4 bg-[#374151] rounded w-3/4" />
+        <div className="skeleton h-3 bg-[#374151] rounded w-1/2" />
+        <div className="skeleton h-3 bg-[#374151] rounded w-2/3" />
       </div>
     </div>
   );
@@ -102,13 +102,13 @@ function VideoCard({ video, index }: { video: VideoItem; index: number }) {
           <img
             src={video.thumbnail}
             alt={video.title}
-            className="w-full aspect-video object-cover rounded-xl bg-[#e5e5e5] group-hover:rounded-none transition-all duration-200"
+            className="w-full aspect-video object-cover rounded-xl bg-[#374151] group-hover:rounded-none transition-all duration-200"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9' fill='%23e5e5e5'%3E%3Crect width='16' height='9' fill='%23e5e5e5'/%3E%3C/svg%3E";
+              (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9' fill='%23374151'%3E%3Crect width='16' height='9' fill='%23374151'/%3E%3C/svg%3E";
             }}
           />
         </a>
-        <span className="absolute bottom-1.5 right-1.5 bg-black text-white text-xs px-1.5 py-0.5 rounded font-medium">
+        <span className="absolute bottom-1.5 right-1.5 bg-[#0F172A] text-[#F9FAFB] text-xs px-1.5 py-0.5 rounded font-medium">
           #{index + 1}
         </span>
       </div>
@@ -122,18 +122,18 @@ function VideoCard({ video, index }: { video: VideoItem; index: number }) {
             rel="noopener noreferrer"
             className="block"
           >
-            <h3 className="text-sm font-medium text-[#0f0f0f] leading-snug line-clamp-2 group-hover:text-[#ff0000] transition-colors">
+            <h3 className="text-sm font-medium text-[#F9FAFB] leading-snug line-clamp-2 group-hover:text-[#FF0000] transition-colors">
               {video.title}
             </h3>
           </a>
-          <p className="text-xs text-[#606060] mt-1 truncate">{video.channel}</p>
-          <p className="text-xs text-[#606060]">
+          <p className="text-xs text-[#9CA3AF] mt-1 truncate">{video.channel}</p>
+          <p className="text-xs text-[#9CA3AF]">
             {formatViews(video.views)} · {timeAgo(video.publishedAt)}
           </p>
 
           {/* Expandable description */}
           {expanded && video.description && (
-            <p className="text-xs text-[#606060] mt-2 leading-relaxed border-t border-[#e5e5e5] pt-2">
+            <p className="text-xs text-[#9CA3AF] mt-2 leading-relaxed border-t border-[#374151] pt-2">
               {video.description.slice(0, 300)}
               {video.description.length > 300 ? "..." : ""}
             </p>
@@ -143,13 +143,13 @@ function VideoCard({ video, index }: { video: VideoItem; index: number }) {
           <div className="flex items-center gap-2 mt-2">
             <button
               onClick={handleCopyLink}
-              className="text-xs text-[#606060] hover:text-[#ff0000] transition-colors flex items-center gap-1"
+              className="text-xs text-[#9CA3AF] hover:text-[#FF0000] transition-colors flex items-center gap-1"
             >
               {copied ? "✅ 已複製" : "🔗 複製連結"}
             </button>
             <button
               onClick={() => setExpanded(!expanded)}
-              className="text-xs text-[#606060] hover:text-[#ff0000] transition-colors"
+              className="text-xs text-[#9CA3AF] hover:text-[#FF0000] transition-colors"
             >
               {expanded ? "▲ 收起" : "▼ 詳情"}
             </button>
@@ -157,7 +157,7 @@ function VideoCard({ video, index }: { video: VideoItem; index: number }) {
               href={`https://youtube.com/watch?v=${video.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-[#606060] hover:text-[#ff0000] transition-colors flex items-center gap-1 ml-auto"
+              className="text-xs text-[#9CA3AF] hover:text-[#FF0000] transition-colors flex items-center gap-1 ml-auto"
             >
               ▶ YouTube
             </a>
@@ -175,13 +175,12 @@ function Toast({ message, type, onClose }: { message: string; type: "success" | 
   }, [onClose]);
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white ${type === "success" ? "bg-[#282828]" : "bg-red-600"} toast-enter`}>
+    <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white ${type === "success" ? "bg-[#0F172A]" : "bg-red-600"} toast-enter`}>
       {message}
     </div>
   );
 }
 
-// YouTube sidebar icons as inline SVG
 const HomeIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
@@ -258,7 +257,6 @@ export default function HomePage() {
     fetchVideos();
   }, [settingsLoaded, fetchVideos]);
 
-  // Debounced search
   const handleSearchChange = (val: string) => {
     setSearchInput(val);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -340,17 +338,17 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f9f9f9] text-[#0f0f0f] flex flex-col">
+    <div className="min-h-screen bg-[#0B0F19] text-[#F9FAFB] flex flex-col">
       {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-50 bg-white border-b border-[#e5e5e5] h-14 flex items-center px-4 gap-4">
+      <header className="sticky top-0 z-50 bg-[#1F2937] border-b border-[#374151] h-14 flex items-center px-4 gap-4">
         {/* Left: hamburger + logo */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-[#f2f2f2] rounded-full transition-colors"
+            className="p-2 hover:bg-[#374151] rounded-full transition-colors"
             aria-label="切換側邊欄"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#9CA3AF">
               <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
             </svg>
           </button>
@@ -358,7 +356,7 @@ export default function HomePage() {
             <svg width="28" height="20" viewBox="0 0 24 24" fill="#FF0000">
               <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
             </svg>
-            <span className="font-bold text-base tracking-tight">熱門蒐集器</span>
+            <span className="font-bold text-base tracking-tight text-[#F9FAFB]">YouTube 熱門蒐集器</span>
           </a>
         </div>
 
@@ -370,14 +368,14 @@ export default function HomePage() {
               value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="搜尋影片..."
-              className="flex-1 border border-[#d3d3d3] rounded-l-full px-4 py-1.5 text-sm focus:outline-none focus:border-[#1a73e8] bg-white"
+              className="flex-1 border border-[#4B5563] rounded-l-full px-4 py-1.5 text-sm focus:outline-none focus:border-[#FF0000] bg-[#0F172A] text-[#F9FAFB] placeholder-[#6B7280]"
             />
             <button
               onClick={() => setSearch(searchInput)}
-              className="border border-[#d3d3d3] border-l-0 rounded-r-full px-5 py-1.5 bg-[#f8f8f8] hover:bg-[#f0f0f0] transition-colors flex-shrink-0"
+              className="border border-[#4B5563] border-l-0 rounded-r-full px-5 py-1.5 bg-[#1F2937] hover:bg-[#374151] transition-colors flex-shrink-0"
               aria-label="搜尋"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#606060">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#9CA3AF">
                 <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
               </svg>
             </button>
@@ -388,7 +386,7 @@ export default function HomePage() {
         <div className="flex-shrink-0 flex items-center gap-2">
           <a
             href="/settings"
-            className="p-2 hover:bg-[#f2f2f2] rounded-full transition-colors"
+            className="p-2 hover:bg-[#374151] rounded-full transition-colors"
             aria-label="設定"
           >
             <SettingsIcon />
@@ -398,32 +396,32 @@ export default function HomePage() {
 
       <div className="flex flex-1">
         {/* ===== SIDEBAR ===== */}
-        <aside className={`bg-white border-r border-[#e5e5e5] flex-shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-52" : "w-0"}`}>
+        <aside className={`bg-[#1F2937] border-r border-[#374151] flex-shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-52" : "w-0"}`}>
           <nav className="pt-2">
-            <a href="/" className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#0f0f0f] font-medium">
+            <a href="/" className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#F9FAFB] font-medium">
               <HomeIcon />
               <span>首頁</span>
             </a>
-            <div className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#0f0f0f] font-medium">
+            <div className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#F9FAFB] font-medium">
               <TrendingIcon />
               <span>熱門</span>
             </div>
-            <hr className="my-2 border-[#e5e5e5]" />
-            <div className="px-6 py-1.5 text-xs text-[#606060] font-semibold uppercase tracking-wider">地區</div>
+            <hr className="my-2 border-[#374151]" />
+            <div className="px-6 py-1.5 text-xs text-[#6B7280] font-semibold uppercase tracking-wider">地區</div>
             {REGIONS.map((r) => (
               <button
                 key={r.code}
                 onClick={() => handleRegionChange(r.code)}
-                className={`w-full sidebar-item flex items-center gap-6 px-6 py-2 text-sm transition-colors ${region === r.code ? "font-medium" : "text-[#606060]"}`}
+                className={`w-full sidebar-item flex items-center gap-6 px-6 py-2 text-sm transition-colors ${region === r.code ? "font-medium text-[#F9FAFB]" : "text-[#9CA3AF]"}`}
               >
                 <span className="w-6 text-center">📍</span>
                 <span>{r.label}</span>
               </button>
             ))}
-            <hr className="my-2 border-[#e5e5e5]" />
+            <hr className="my-2 border-[#374151]" />
             <a
               href="/settings"
-              className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#606060]"
+              className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#9CA3AF]"
             >
               <SettingsIcon />
               <span>設定</span>
@@ -434,11 +432,11 @@ export default function HomePage() {
         {/* ===== MAIN CONTENT ===== */}
         <main className="flex-1 min-w-0">
           {/* Filter bar */}
-          <div className="bg-white border-b border-[#e5e5e5] px-6 py-3 flex flex-wrap gap-3 items-center">
+          <div className="bg-[#1F2937] border-b border-[#374151] px-6 py-3 flex flex-wrap gap-3 items-center">
             <select
               value={region}
               onChange={(e) => handleRegionChange(e.target.value)}
-              className="border border-[#d3d3d3] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-[#1a73e8] cursor-pointer"
+              className="border border-[#4B5563] rounded-full px-3 py-1.5 text-sm bg-[#0F172A] focus:outline-none focus:border-[#FF0000] cursor-pointer text-[#F9FAFB]"
             >
               {REGIONS.map((r) => (
                 <option key={r.code} value={r.code}>{r.label}</option>
@@ -447,25 +445,25 @@ export default function HomePage() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="border border-[#d3d3d3] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-[#1a73e8] cursor-pointer"
+              className="border border-[#4B5563] rounded-full px-3 py-1.5 text-sm bg-[#0F172A] focus:outline-none focus:border-[#FF0000] cursor-pointer text-[#F9FAFB]"
             >
               {CATEGORIES.map((c) => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>
-            <div className="ml-auto flex items-center gap-2 text-xs text-[#606060]">
+            <div className="ml-auto flex items-center gap-2 text-xs text-[#9CA3AF]">
               {search && <span>🔍 搜尋：{search}</span>}
               <span>{sortedVideos.length} 部影片</span>
             </div>
           </div>
 
           {/* Sort buttons */}
-          <div className="bg-white border-b border-[#e5e5e5] px-6 py-2 flex flex-wrap gap-2">
+          <div className="bg-[#1F2937] border-b border-[#374151] px-6 py-2 flex flex-wrap gap-2">
             {sortButtons.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => handleSort(key)}
-                className={`text-xs px-3 py-1 rounded-full border transition-colors ${sortKey === key ? "border-[#ff0000] text-[#ff0000] font-medium" : "border-[#d3d3d3] text-[#606060] hover:border-[#999]"}`}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${sortKey === key ? "border-[#FF0000] text-[#FF0000] font-medium" : "border-[#4B5563] text-[#9CA3AF] hover:border-[#6B7280]"}`}
               >
                 {label}<SortIcon col={key} />
               </button>
@@ -475,20 +473,20 @@ export default function HomePage() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => downloadFile("csv")}
-                className="text-xs px-3 py-1 rounded-full border border-[#d3d3d3] text-[#606060] hover:bg-[#f2f2f2] transition-colors"
+                className="text-xs px-3 py-1 rounded-full border border-[#4B5563] text-[#9CA3AF] hover:bg-[#374151] transition-colors"
               >
                 📄 CSV
               </button>
               <button
                 onClick={() => downloadFile("xlsx")}
-                className="text-xs px-3 py-1 rounded-full border border-[#d3d3d3] text-[#606060] hover:bg-[#f2f2f2] transition-colors"
+                className="text-xs px-3 py-1 rounded-full border border-[#4B5563] text-[#9CA3AF] hover:bg-[#374151] transition-colors"
               >
                 📊 Excel
               </button>
               <button
                 onClick={sendTelegram}
                 disabled={notifyLoading}
-                className="text-xs px-3 py-1 rounded-full border border-[#d3d3d3] text-[#606060] hover:bg-[#f2f2f2] transition-colors disabled:opacity-50"
+                className="text-xs px-3 py-1 rounded-full border border-[#4B5563] text-[#9CA3AF] hover:bg-[#374151] transition-colors disabled:opacity-50"
               >
                 {notifyLoading ? "📤 傳送中..." : "📨 Telegram"}
               </button>
@@ -504,11 +502,11 @@ export default function HomePage() {
                 ))}
               </div>
             ) : sortedVideos.length === 0 ? (
-              <div className="text-center py-24 text-[#606060]">
+              <div className="text-center py-24 text-[#9CA3AF]">
                 <div className="text-5xl mb-4">📭</div>
-                <p className="text-base font-medium text-[#0f0f0f] mb-2">尚無收集記錄</p>
+                <p className="text-base font-medium text-[#F9FAFB] mb-2">尚無收集記錄</p>
                 <p className="text-sm">選擇地區或類別後點擊「更新」以抓取熱門影片</p>
-                <p className="text-xs mt-1 text-[#909090]">請確認 YOUTUBE_API_KEY 環境變數已設定</p>
+                <p className="text-xs mt-1 text-[#6B7280]">請確認 YOUTUBE_API_KEY 環境變數已設定</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
