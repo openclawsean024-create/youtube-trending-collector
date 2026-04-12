@@ -1,74 +1,131 @@
-import { NextRequest, NextResponse } from 'next/server'
-import * as fs from 'fs'
-import * as path from 'path'
+import { NextRequest, NextResponse } from "next/server";
 
-const CONFIG_FILE = path.join(process.cwd(), 'youtube_config.json')
+// Use Vercel KV for persistent config storage
+// Falls back to in-memory if KV is not configured
+let kvStore: Record<string, string> = {};
+let kvAvailable = false;
 
-interface Config {
-  telegram_bot_token: string
-  telegram_chat_id: string
-  region: string
-  category: string
-  max_videos: number
-  min_views: number
-  post_time: string
-}
-
-function loadConfig(): Config {
-  const defaults: Config = {
-    telegram_bot_token: '',
-    telegram_chat_id: '',
-    region: 'TW',
-    category: 'All',
-    max_videos: 20,
-    min_views: 100000,
-    post_time: '20:00',
-  }
-  if (!fs.existsSync(CONFIG_FILE)) return defaults
+async function initKV() {
+  if (kvAvailable) return;
   try {
-    return { ...defaults, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')) }
-  } catch { return defaults }
+    const { createClient } = await import("@vercel/kv");
+    const kv = createClient({
+      url: process.env.KV_URL!,
+      token: process.env.KV_REST_API_TOKEN!,
+    });
+    // Test connectivity
+    await kv.get("config");
+    kvAvailable = true;
+    console.log("[config] Vercel KV connected");
+  } catch {
+    kvAvailable = false;
+    console.log("[config] Vercel KV not available, using in-memory store");
+  }
 }
 
-function maskConfig(config: Config) {
-  const token = config.telegram_bot_token || ''
-  const masked = token.length > 15
-    ? token.substring(0, 8) + '...' + token.substring(token.length - 5)
-    : token
+const CONFIG_KEY = "app:config";
+
+interface StoredConfig {
+  telegramBotToken?: string;
+  telegramChatId?: string;
+  defaultRegion?: string;
+  defaultCategory?: string;
+  notifyOnNewVideos?: boolean;
+  discordWebhook?: string;
+  updatedAt?: string;
+}
+
+async function loadConfig(): Promise<StoredConfig> {
+  await initKV();
+  if (!kvAvailable) return {};
+
+  try {
+    const { createClient } = await import("@vercel/kv");
+    const kv = createClient({
+      url: process.env.KV_URL!,
+      token: process.env.KV_REST_API_TOKEN!,
+    });
+    const raw = await kv.get<string>(CONFIG_KEY);
+    if (raw) {
+      return JSON.parse(raw) as StoredConfig;
+    }
+  } catch (e) {
+    console.error("[config] Failed to load from KV:", e);
+  }
+  return {};
+}
+
+async function saveConfig(data: StoredConfig): Promise<StoredConfig> {
+  await initKV();
+  const merged = { ...data, updatedAt: new Date().toISOString() };
+
+  if (kvAvailable) {
+    try {
+      const { createClient } = await import("@vercel/kv");
+      const kv = createClient({
+        url: process.env.KV_URL!,
+        token: process.env.KV_REST_API_TOKEN!,
+      });
+      await kv.set(CONFIG_KEY, JSON.stringify(merged));
+    } catch (e) {
+      console.error("[config] Failed to save to KV:", e);
+    }
+  }
+
+  // Also persist to local file as fallback (for local dev)
+  try {
+    const fs = await import("fs");
+    const path = await import("path");
+    const filePath = path.join(process.cwd(), "youtube_config.json");
+    fs.writeFileSync(filePath, JSON.stringify(merged, null, 2));
+  } catch {
+    // ignore
+  }
+
+  return merged;
+}
+
+function maskConfig(config: StoredConfig): StoredConfig {
+  const token = config.telegramBotToken || "";
+  const masked = token.length > 12
+    ? token.substring(0, 6) + "..." + token.substring(token.length - 6)
+    : token;
   return {
     ...config,
-    telegram_bot_token: masked,
-    telegram_bot_token_set: !!token,
-    telegram_chat_id: config.telegram_chat_id || '未設定',
-    telegram_chat_id_set: !!config.telegram_chat_id,
-  }
+    telegramBotToken: masked,
+    telegramBotTokenSet: !!token,
+  };
 }
 
 export async function GET() {
   try {
-    const config = loadConfig()
-    return NextResponse.json({ success: true, config: maskConfig(config) })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    const config = await loadConfig();
+    return NextResponse.json({
+      success: true,
+      ...maskConfig(config),
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const config = loadConfig()
+    const body = await request.json();
 
-    if (typeof body.telegram_bot_token === 'string') config.telegram_bot_token = body.telegram_bot_token
-    if (typeof body.telegram_chat_id === 'string') config.telegram_chat_id = body.telegram_chat_id
-    if (typeof body.region === 'string') config.region = body.region
-    if (typeof body.category === 'string') config.category = body.category
-    if (typeof body.max_videos === 'number') config.max_videos = body.max_videos
-    if (typeof body.min_views === 'number') config.min_views = body.min_views
-    if (typeof body.post_time === 'string') config.post_time = body.post_time
+    const config: StoredConfig = {};
+    if (typeof body.telegramBotToken === "string") config.telegramBotToken = body.telegramBotToken;
+    if (typeof body.telegramChatId === "string") config.telegramChatId = body.telegramChatId;
+    if (typeof body.defaultRegion === "string") config.defaultRegion = body.defaultRegion;
+    if (typeof body.defaultCategory === "string") config.defaultCategory = body.defaultCategory;
+    if (typeof body.notifyOnNewVideos === "boolean") config.notifyOnNewVideos = body.notifyOnNewVideos;
+    if (typeof body.discordWebhook === "string") config.discordWebhook = body.discordWebhook;
 
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2))
-    return NextResponse.json({ success: true, config: maskConfig(config) })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    const saved = await saveConfig(config);
+    return NextResponse.json({ success: true, ...maskConfig(saved) });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
