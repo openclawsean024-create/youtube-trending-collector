@@ -33,6 +33,7 @@ interface StoredConfig {
   notifyOnNewVideos?: boolean;
   discordWebhook?: string;
   updatedAt?: string;
+  telegramBotTokenSet?: boolean;
 }
 
 async function loadConfig(): Promise<StoredConfig> {
