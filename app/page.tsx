@@ -208,13 +208,14 @@ export default function HomePage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [telegramBotToken, setTelegramBotToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [autoUpdateInterval, setAutoUpdateInterval] = useState(0);
   const [notifyLoading, setNotifyLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load settings from localStorage first, then from /api/config
+  // Load settings from localStorage + /api/config
   useEffect(() => {
     try {
       const stored = localStorage.getItem("youtube-trending-settings");
@@ -222,6 +223,9 @@ export default function HomePage() {
         const saved = JSON.parse(stored);
         if (saved.region) setRegion(saved.region);
         if (saved.category !== undefined) setCategory(saved.category);
+        if (saved.telegramBotToken) setTelegramBotToken(saved.telegramBotToken);
+        if (saved.telegramChatId) setTelegramChatId(saved.telegramChatId);
+        if (saved.autoUpdateInterval !== undefined) setAutoUpdateInterval(saved.autoUpdateInterval);
       }
     } catch {}
     fetch("/api/config")
@@ -231,6 +235,7 @@ export default function HomePage() {
         defaultCategory?: string;
         telegramBotToken?: string;
         telegramChatId?: string;
+        autoUpdateInterval?: number;
       }) => {
         // Only apply API defaults if localStorage didn't have values
         const hasStored = () => {
@@ -242,24 +247,25 @@ export default function HomePage() {
         }
         if (data.telegramBotToken) setTelegramBotToken(data.telegramBotToken);
         if (data.telegramChatId) setTelegramChatId(data.telegramChatId);
+        if (!hasStored() && data.autoUpdateInterval !== undefined) setAutoUpdateInterval(data.autoUpdateInterval);
         setSettingsLoaded(true);
       })
       .catch(() => setSettingsLoaded(true));
   }, []);
 
-  // Persist region/category to localStorage when they change
+  // Persist all settings to localStorage
   useEffect(() => {
     if (!settingsLoaded) return;
     try {
-      const stored = localStorage.getItem("youtube-trending-settings");
-      const current = stored ? JSON.parse(stored) : {};
       localStorage.setItem("youtube-trending-settings", JSON.stringify({
-        ...current,
         region,
         category,
+        telegramBotToken,
+        telegramChatId,
+        autoUpdateInterval,
       }));
     } catch {}
-  }, [region, category, settingsLoaded]);
+  }, [region, category, telegramBotToken, telegramChatId, autoUpdateInterval, settingsLoaded]);
 
   const fetchVideos = useCallback(async (overrideSearch?: string) => {
     setLoading(true);
@@ -314,6 +320,13 @@ export default function HomePage() {
     else { setSortKey(key); setSortDir("desc"); }
   };
 
+  // Auto-update interval
+  useEffect(() => {
+    if (!settingsLoaded || autoUpdateInterval === 0) return;
+    const id = setInterval(() => fetchVideos(), autoUpdateInterval * 60 * 1000);
+    return () => clearInterval(id);
+  }, [settingsLoaded, autoUpdateInterval]);
+
   const downloadFile = async (format: "csv" | "xlsx") => {
     const res = await fetch("/api/export", {
       method: "POST",
@@ -366,7 +379,7 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-[#F9FAFB] flex flex-col">
+    <div className="min-h-screen bg-[#0f0f0f] text-[#F9FAFB] flex flex-col">
       {/* ===== HEADER ===== */}
       <header className="sticky top-0 z-50 bg-[#0f0f0f] border-b border-[#374151] h-14 flex items-center px-4 gap-4">
         {/* Left: hamburger + logo */}

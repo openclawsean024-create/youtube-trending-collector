@@ -121,7 +121,7 @@ export default function SettingsPage() {
       .catch(() => setApiStatus({ hasApiKey: false }));
   }, []);
 
-  // Persist settings to localStorage whenever they change
+  // Persist ALL settings to localStorage (for page.tsx to reload)
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -131,9 +131,12 @@ export default function SettingsPage() {
         telegramBotToken,
         telegramChatId,
         autoUpdateInterval,
+        defaultRegion,
+        defaultCategory,
+        discordWebhook,
       }));
     } catch {}
-  }, [telegramBotToken, telegramChatId, autoUpdateInterval]);
+  }, [telegramBotToken, telegramChatId, autoUpdateInterval, defaultRegion, defaultCategory, discordWebhook]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -170,11 +173,15 @@ export default function SettingsPage() {
     setTelegramBotToken("");
     setTelegramChatId("");
     setAutoUpdateInterval(0);
+    setDefaultRegion("TW");
+    setDefaultCategory("");
+    setDiscordWebhook("");
+    setNotifyOnNewVideos(true);
     setToast({ message: "✅ 所有設定已清除", type: "success" });
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F19]">
+    <div className="min-h-screen bg-[#0f0f0f]">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-[#0f0f0f] border-b border-[#374151] h-14 flex items-center px-4 gap-4">
         <a href="/" className="p-2 hover:bg-[#374151] rounded-full transition-colors">
