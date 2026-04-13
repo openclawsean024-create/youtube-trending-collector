@@ -35,6 +35,7 @@ interface Config {
   defaultRegion: string;
   defaultCategory: string;
   notifyOnNewVideos: boolean;
+  autoUpdateInterval: number; // minutes: 0=off, 30, 60, 180
 }
 
 function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
@@ -51,7 +52,7 @@ function Toast({ message, type, onClose }: { message: string; type: "success" | 
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
+    <div className="bg-[#0f0f0f] rounded-xl border border-[#374151] overflow-hidden">
       <div className="px-5 py-4 border-b border-[#374151]">
         <h2 className="text-sm font-bold text-[#F9FAFB]">{title}</h2>
       </div>
@@ -79,52 +80,103 @@ export default function SettingsPage() {
   const [defaultRegion, setDefaultRegion] = useState("TW");
   const [defaultCategory, setDefaultCategory] = useState("");
   const [notifyOnNewVideos, setNotifyOnNewVideos] = useState(true);
+  const [autoUpdateInterval, setAutoUpdateInterval] = useState(0);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const [apiStatus, setApiStatus] = useState<{ hasApiKey: boolean } | null>(null);
 
+  const STORAGE_KEY = "youtube-trending-settings";
+
+  // Load from localStorage on mount
   useEffect(() => {
-    const savedDiscord = localStorage.getItem('yt-discord-webhook') || '';
-    const savedTelegramBotToken = localStorage.getItem('yt-telegram-bot-token') || '';
-    const savedTelegramChatId = localStorage.getItem('yt-telegram-chat-id') || '';
-    const savedRegion = localStorage.getItem('yt-region') || 'TW';
-    const savedCategory = localStorage.getItem('yt-category') || '';
-    const savedNotify = localStorage.getItem('yt-notify-on-new');
-    setDiscordWebhook(savedDiscord);
-    setTelegramBotToken(savedTelegramBotToken);
-    setTelegramChatId(savedTelegramChatId);
-    setDefaultRegion(savedRegion);
-    setDefaultCategory(savedCategory);
-    setNotifyOnNewVideos(savedNotify !== 'false');
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const saved = JSON.parse(stored);
+        if (saved.telegramBotToken) setTelegramBotToken(saved.telegramBotToken);
+        if (saved.telegramChatId) setTelegramChatId(saved.telegramChatId);
+        if (saved.autoUpdateInterval !== undefined) setAutoUpdateInterval(saved.autoUpdateInterval);
+      }
+    } catch {}
+
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data: Config) => {
+        // localStorage takes priority for these
+        const stored = localStorage.getItem(STORAGE_KEY);
+        const hasStored = stored ? JSON.parse(stored) : {};
+        setDiscordWebhook(data.discordWebhook || "");
+        setTelegramBotToken(hasStored.telegramBotToken || data.telegramBotToken || "");
+        setTelegramChatId(hasStored.telegramChatId || data.telegramChatId || "");
+        setDefaultRegion(data.defaultRegion || "TW");
+        setDefaultCategory(data.defaultCategory || "");
+        setNotifyOnNewVideos(data.notifyOnNewVideos ?? true);
+        setAutoUpdateInterval(hasStored.autoUpdateInterval ?? data.autoUpdateInterval ?? 0);
+      })
+      .catch(() => {});
     fetch("/api/status")
       .then((r) => r.json())
       .then((d) => setApiStatus(d))
       .catch(() => setApiStatus({ hasApiKey: false }));
   }, []);
 
+  // Persist settings to localStorage whenever they change
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const current = stored ? JSON.parse(stored) : {};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...current,
+        telegramBotToken,
+        telegramChatId,
+        autoUpdateInterval,
+      }));
+    } catch {}
+  }, [telegramBotToken, telegramChatId, autoUpdateInterval]);
+
   const handleSave = async () => {
     setLoading(true);
     setToast(null);
     try {
-      localStorage.setItem('yt-discord-webhook', discordWebhook);
-      localStorage.setItem('yt-telegram-bot-token', telegramBotToken);
-      localStorage.setItem('yt-telegram-chat-id', telegramChatId);
-      localStorage.setItem('yt-region', defaultRegion);
-      localStorage.setItem('yt-category', defaultCategory);
-      localStorage.setItem('yt-notify-on-new', String(notifyOnNewVideos));
-      setToast({ message: '✅ 設定已儲存', type: 'success' });
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          discordWebhook,
+          telegramBotToken,
+          telegramChatId,
+          defaultRegion,
+          defaultCategory,
+          notifyOnNewVideos,
+          autoUpdateInterval,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setToast({ message: "✅ 設定已儲存", type: "success" });
+      } else {
+        setToast({ message: `⚠️ ${data.error || "儲存失敗"}`, type: "error" });
+      }
     } catch {
-      setToast({ message: '⚠️ 儲存失敗，請稍後再試', type: 'error' });
+      setToast({ message: "⚠️ 儲存失敗，請稍後再試", type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleClearAll = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setTelegramBotToken("");
+    setTelegramChatId("");
+    setAutoUpdateInterval(0);
+    setToast({ message: "✅ 所有設定已清除", type: "success" });
+  };
+
   return (
     <div className="min-h-screen bg-[#0B0F19]">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#1F2937] border-b border-[#374151] h-14 flex items-center px-4 gap-4">
+      <header className="sticky top-0 z-50 bg-[#0f0f0f] border-b border-[#374151] h-14 flex items-center px-4 gap-4">
         <a href="/" className="p-2 hover:bg-[#374151] rounded-full transition-colors">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="#9CA3AF">
             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
@@ -166,6 +218,24 @@ export default function SettingsPage() {
               ))}
             </select>
             <FieldHint>留空表示所有類別</FieldHint>
+          </div>
+        </SectionCard>
+
+        {/* Auto-update interval */}
+        <SectionCard title="⏱️ 自動更新設定">
+          <div>
+            <FieldLabel>自動更新間隔</FieldLabel>
+            <select
+              value={autoUpdateInterval}
+              onChange={(e) => setAutoUpdateInterval(Number(e.target.value))}
+              className="w-full border border-[#4B5563] rounded-lg px-3 py-2.5 text-sm bg-[#0F172A] focus:outline-none focus:border-[#FF0000] cursor-pointer text-[#F9FAFB]"
+            >
+              <option value={0}>關閉</option>
+              <option value={30}>每 30 分鐘</option>
+              <option value={60}>每 1 小時</option>
+              <option value={180}>每 3 小時</option>
+            </select>
+            <FieldHint>選擇關閉則不自動更新，點擊首頁的「立即更新」手動刷新</FieldHint>
           </div>
         </SectionCard>
 
@@ -234,7 +304,7 @@ export default function SettingsPage() {
           <FieldHint>請在 Vercel 環境變數中設定 YOUTUBE_API_KEY</FieldHint>
         </SectionCard>
 
-        {/* Save button */}
+        {/* Save + Clear buttons */}
         <div className="flex items-center gap-4">
           <button
             onClick={handleSave}
@@ -242,6 +312,12 @@ export default function SettingsPage() {
             className="bg-[#FF0000] hover:bg-[#CC0000] disabled:opacity-50 text-white rounded-full px-8 py-2.5 text-sm font-medium transition-colors"
           >
             {loading ? "儲存中..." : "💾 儲存設定"}
+          </button>
+          <button
+            onClick={handleClearAll}
+            className="bg-[#374151] hover:bg-[#4B5563] text-[#F9FAFB] rounded-full px-6 py-2.5 text-sm font-medium transition-colors"
+          >
+            🗑️ 清除所有設定
           </button>
         </div>
       </main>

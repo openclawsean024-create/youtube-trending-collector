@@ -214,18 +214,52 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load settings from localStorage
+  // Load settings from localStorage first, then from /api/config
   useEffect(() => {
-    const savedRegion = localStorage.getItem('yt-region');
-    const savedCategory = localStorage.getItem('yt-category');
-    const savedTelegramBotToken = localStorage.getItem('yt-telegram-bot-token');
-    const savedTelegramChatId = localStorage.getItem('yt-telegram-chat-id');
-    if (savedRegion) setRegion(savedRegion);
-    if (savedCategory !== null) setCategory(savedCategory);
-    if (savedTelegramBotToken) setTelegramBotToken(savedTelegramBotToken);
-    if (savedTelegramChatId) setTelegramChatId(savedTelegramChatId);
-    setSettingsLoaded(true);
+    try {
+      const stored = localStorage.getItem("youtube-trending-settings");
+      if (stored) {
+        const saved = JSON.parse(stored);
+        if (saved.region) setRegion(saved.region);
+        if (saved.category !== undefined) setCategory(saved.category);
+      }
+    } catch {}
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data: {
+        defaultRegion?: string;
+        defaultCategory?: string;
+        telegramBotToken?: string;
+        telegramChatId?: string;
+      }) => {
+        // Only apply API defaults if localStorage didn't have values
+        const hasStored = () => {
+          try { return !!localStorage.getItem("youtube-trending-settings"); } catch { return false; }
+        };
+        if (!hasStored()) {
+          if (data.defaultRegion) setRegion(data.defaultRegion);
+          if (data.defaultCategory !== undefined) setCategory(data.defaultCategory);
+        }
+        if (data.telegramBotToken) setTelegramBotToken(data.telegramBotToken);
+        if (data.telegramChatId) setTelegramChatId(data.telegramChatId);
+        setSettingsLoaded(true);
+      })
+      .catch(() => setSettingsLoaded(true));
   }, []);
+
+  // Persist region/category to localStorage when they change
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    try {
+      const stored = localStorage.getItem("youtube-trending-settings");
+      const current = stored ? JSON.parse(stored) : {};
+      localStorage.setItem("youtube-trending-settings", JSON.stringify({
+        ...current,
+        region,
+        category,
+      }));
+    } catch {}
+  }, [region, category, settingsLoaded]);
 
   const fetchVideos = useCallback(async (overrideSearch?: string) => {
     setLoading(true);
@@ -334,7 +368,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#0B0F19] text-[#F9FAFB] flex flex-col">
       {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-50 bg-[#1F2937] border-b border-[#374151] h-14 flex items-center px-4 gap-4">
+      <header className="sticky top-0 z-50 bg-[#0f0f0f] border-b border-[#374151] h-14 flex items-center px-4 gap-4">
         {/* Left: hamburger + logo */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <button
@@ -390,7 +424,7 @@ export default function HomePage() {
 
       <div className="flex flex-1">
         {/* ===== SIDEBAR ===== */}
-        <aside className={`bg-[#1F2937] border-r border-[#374151] flex-shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-52" : "w-0"}`}>
+        <aside className={`bg-[#0f0f0f] border-r border-[#374151] flex-shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-52" : "w-0"}`}>
           <nav className="pt-2">
             <a href="/" className="sidebar-item flex items-center gap-6 px-6 py-2.5 text-sm text-[#F9FAFB] font-medium">
               <HomeIcon />
@@ -426,7 +460,14 @@ export default function HomePage() {
         {/* ===== MAIN CONTENT ===== */}
         <main className="flex-1 min-w-0">
           {/* Filter bar */}
-          <div className="bg-[#1F2937] border-b border-[#374151] px-6 py-3 flex flex-wrap gap-3 items-center">
+          <div className="bg-[#0f0f0f] border-b border-[#374151] px-6 py-3 flex flex-wrap gap-3 items-center">
+            <button
+              onClick={() => fetchVideos()}
+              className="bg-[#FF0000] hover:bg-[#CC0000] text-white rounded-full px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              立即更新
+            </button>
             <select
               value={region}
               onChange={(e) => handleRegionChange(e.target.value)}
@@ -452,7 +493,7 @@ export default function HomePage() {
           </div>
 
           {/* Sort buttons */}
-          <div className="bg-[#1F2937] border-b border-[#374151] px-6 py-2 flex flex-wrap gap-2">
+          <div className="bg-[#0f0f0f] border-b border-[#374151] px-6 py-2 flex flex-wrap gap-2">
             {sortButtons.map(({ key, label }) => (
               <button
                 key={key}

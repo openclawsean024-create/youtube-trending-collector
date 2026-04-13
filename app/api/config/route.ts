@@ -14,6 +14,7 @@ interface Config {
   notifyOnNewVideos: boolean
   defaultRegion: string
   defaultCategory: string
+  autoUpdateInterval: number
 }
 
 function defaults(): Config & Record<string, unknown> {
@@ -24,6 +25,7 @@ function defaults(): Config & Record<string, unknown> {
     notifyOnNewVideos: true,
     defaultRegion: 'TW',
     defaultCategory: '',
+    autoUpdateInterval: 0,
     maxVideos: 20,
     minViews: 100000,
     postTime: '20:00',
@@ -81,6 +83,7 @@ export async function POST(request: NextRequest) {
     if (typeof body.notifyOnNewVideos === 'boolean') config.notifyOnNewVideos = body.notifyOnNewVideos
     if (typeof body.defaultRegion === 'string') config.defaultRegion = body.defaultRegion
     if (typeof body.defaultCategory === 'string') config.defaultCategory = body.defaultCategory
+    if (typeof body.autoUpdateInterval === 'number') config.autoUpdateInterval = body.autoUpdateInterval
     if (typeof body.maxVideos === 'number') config.maxVideos = body.maxVideos
     if (typeof body.minViews === 'number') config.minViews = body.minViews
     if (typeof body.postTime === 'string') config.postTime = body.postTime
