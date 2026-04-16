@@ -72,27 +72,46 @@ interface ExtractedVideo {
   description: string;
 }
 
-async function scrapeYouTubeTrending(region: string, category: string): Promise<VideoItem[]> {
-  // Build the YouTube search URL with "This week" filter
-  // sp=EgQIAhAB = "This week" filter (trending videos)
-  const regionLang = region === "TW" ? "zh-TW" : region === "HK" ? "zh-HK" : region === "JP" ? "ja-JP" : region === "KR" ? "ko-KR" : "en-US";
-  
-  // For category-specific trending, use category keyword search
-  let searchQuery = "";
-  const categoryKeywords: Record<string, string> = {
-    "10": "音樂+热门+music+trending",
-    "20": "游戏+gaming+trending",
-    "22": "户外+outdoor+trending",
-    "23": "喜剧+comedy+trending",
-    "24": "娱乐+entertainment+trending",
-    "25": "新闻+news+trending",
-    "27": "宠物+animals+trending",
-    "28": "科技+science+technology+trending",
-    "17": "体育+sports+trending",
-  };
-  if (category && categoryKeywords[category]) {
-    searchQuery = encodeURIComponent(categoryKeywords[category].split("+")[0]);
+// Extract JSON object from a JavaScript object literal using a simple brace-counting parser
+function extractJsonObject(html: string, startMarker: string): string | null {
+  const idx = html.indexOf(startMarker);
+  if (idx === -1) return null;
+  const start = idx + startMarker.length;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\") { escape = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return html.slice(start, i + 1);
+    }
   }
+  return null;
+}
+
+async function scrapeYouTubeTrending(region: string, category: string): Promise<VideoItem[]> {
+  const regionLang = region === "TW" ? "zh-TW" : region === "HK" ? "zh-HK" : region === "JP" ? "ja-JP" : region === "KR" ? "ko-KR" : "en-US";
+
+  const categoryKeywords: Record<string, string> = {
+    "10": "音樂",
+    "20": "遊戲",
+    "22": "戶外活動",
+    "23": "喜劇",
+    "24": "娛樂",
+    "25": "新聞",
+    "27": "寵物",
+    "28": "科學科技",
+    "17": "體育",
+  };
+  const searchQuery = category && categoryKeywords[category]
+    ? encodeURIComponent(categoryKeywords[category])
+    : "";
 
   const sp = "EgQIAhAB"; // This week filter
   const url = `https://www.youtube.com/results?sp=${sp}&search_query=${searchQuery}`;
@@ -108,38 +127,50 @@ async function scrapeYouTubeTrending(region: string, category: string): Promise<
   if (!res.ok) throw new Error(`YouTube scrape failed: ${res.status}`);
   const html = await res.text();
 
-  // Extract ytInitialData JSON from HTML
-  const jsonMatch = html.match(/ytInitialData\s*=\s*({.*?});/s);
-  if (!jsonMatch) throw new Error("ytInitialData not found in page");
+  const jsonStr = extractJsonObject(html, "ytInitialData = ");
+  if (!jsonStr) throw new Error("ytInitialData not found in page");
 
-  const data = JSON.parse(jsonMatch[1]);
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(jsonStr);
+  } catch (err) {
+    throw new Error("Failed to parse ytInitialData JSON: " + err);
+  }
+
   const videos: VideoItem[] = [];
   const seenIds = new Set<string>();
 
   try {
-    const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-    for (const section of sections) {
-      if (!section.itemSectionRenderer) continue;
-      for (const item of section.itemSectionRenderer.contents) {
-        const v = item.videoRenderer;
-        if (!v?.videoId) continue;
-        if (seenIds.has(v.videoId)) continue;
-        seenIds.add(v.videoId);
+    const sections = (
+      data.contents as Record<string, unknown>
+    )?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
 
-        const titleRuns = v.title?.runs || [];
-        const title = titleRuns[0]?.text || "";
-        const channelRuns = v.longBylineText?.runs || [];
-        const channel = channelRuns[0]?.text || "";
-        const channelId = channelRuns[0]?.navigationEndpoint?.browseEndpoint?.browseId || "";
-        const viewText = v.viewCountText?.simpleText || "";
-        const publishedText = v.publishedTimeText?.simpleText || "";
-        const descRuns = v.descriptionSnippet?.runs || [];
-        const description = descRuns.map((r: { text: string }) => r.text).join("");
-        const thumbnails = v.thumbnail?.thumbnails || [];
-        const thumb = thumbnails[0]?.url || `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg`;
+    for (const section of sections as Array<Record<string, unknown>>) {
+      if (!section.itemSectionRenderer) continue;
+      const items = (section.itemSectionRenderer as Record<string, unknown>).contents || [];
+      for (const item of items as Array<Record<string, unknown>>) {
+        const v = item.videoRenderer as Record<string, unknown> | undefined;
+        if (!v?.videoId) continue;
+        const vid = v.videoId as string;
+        if (seenIds.has(vid)) continue;
+        seenIds.add(vid);
+
+        const titleRuns = (v.title as Record<string, unknown>)?.runs as Array<Record<string, unknown>> || [];
+        const title = (titleRuns[0]?.text as string) || "";
+        const channelRuns = (v.longBylineText as Record<string, unknown>)?.runs as Array<Record<string, unknown>> || [];
+        const channel = (channelRuns[0]?.text as string) || "";
+        const channelNav = channelRuns[0]?.navigationEndpoint as Record<string, unknown>;
+        const channelBrowse = channelNav?.browseEndpoint as Record<string, unknown>;
+        const channelId = (channelBrowse?.browseId as string) || "";
+        const viewText = (v.viewCountText as Record<string, unknown>)?.simpleText as string || "";
+        const publishedText = (v.publishedTimeText as Record<string, unknown>)?.simpleText as string || "";
+        const descRuns = (v.descriptionSnippet as Record<string, unknown>)?.runs as Array<Record<string, unknown>> || [];
+        const description = descRuns.map((r) => r.text as string).join("");
+        const thumbnails = (v.thumbnail as Record<string, unknown>)?.thumbnails as Array<Record<string, unknown>> || [];
+        const thumb = (thumbnails[0]?.url as string) || `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
 
         videos.push({
-          id: v.videoId,
+          id: vid,
           title,
           channel,
           channelId,

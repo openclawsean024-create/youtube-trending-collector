@@ -106,9 +106,28 @@ function parseRelativeTime(text: string): string {
   return now.toISOString();
 }
 
+function extractJsonObject(html: string, startMarker: string): string | null {
+  const idx = html.indexOf(startMarker);
+  if (idx === -1) return null;
+  const start = idx + startMarker.length;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\") { escape = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === "{") depth++;
+    else if (c === "}") { depth--; if (depth === 0) return html.slice(start, i + 1); }
+  }
+  return null;
+}
+
 async function scrapeTrendingIds(region: string): Promise<{ ids: string[]; html: string }> {
   const regionLang = region === "TW" ? "zh-TW" : "en-US";
-  const sp = "EgQIAhAB"; // This week filter
+  const sp = "EgQIAhAB";
   const url = `https://www.youtube.com/results?sp=${sp}&search_query=`;
   const res = await fetch(url, {
     headers: {
@@ -120,22 +139,26 @@ async function scrapeTrendingIds(region: string): Promise<{ ids: string[]; html:
   if (!res.ok) throw new Error(`Scrape error: ${res.status}`);
   const html = await res.text();
 
-  const jsonMatch = html.match(/ytInitialData\s*=\s*({.*?});/s);
-  if (!jsonMatch) throw new Error("ytInitialData not found");
+  const jsonStr = extractJsonObject(html, "ytInitialData = ");
+  if (!jsonStr) throw new Error("ytInitialData not found");
 
-  const data = JSON.parse(jsonMatch[1]);
+  const data = JSON.parse(jsonStr);
   const ids: string[] = [];
   const seenIds = new Set<string>();
 
   try {
-    const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-    for (const section of sections) {
+    const sections = (
+      data.contents as Record<string, unknown>
+    )?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+
+    for (const section of sections as Array<Record<string, unknown>>) {
       if (!section.itemSectionRenderer) continue;
-      for (const item of section.itemSectionRenderer.contents) {
-        const v = item.videoRenderer;
-        if (!v?.videoId || seenIds.has(v.videoId)) continue;
-        seenIds.add(v.videoId);
-        ids.push(v.videoId);
+      const items = (section.itemSectionRenderer as Record<string, unknown>).contents || [];
+      for (const item of items as Array<Record<string, unknown>>) {
+        const v = item.videoRenderer as Record<string, unknown> | undefined;
+        if (!v?.videoId || seenIds.has(v.videoId as string)) continue;
+        seenIds.add(v.videoId as string);
+        ids.push(v.videoId as string);
         if (ids.length >= 50) break;
       }
       if (ids.length >= 50) break;
@@ -163,8 +186,7 @@ export async function GET() {
     const newIds = currentIds.filter((id: string) => !lastIdSet.has(id));
 
     if (newIds.length > 0) {
-      // Parse full metadata from cached HTML for new videos
-      const data = JSON.parse(html.match(/ytInitialData\s*=\s*({.*?});/s)?.[1] || "{}");
+      const data = JSON.parse(extractJsonObject(html, "ytInitialData = ") || "{}");
       const newVideos: Array<{
         id: string;
         title: string;
@@ -177,23 +199,27 @@ export async function GET() {
       }> = [];
 
       try {
-        const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-        for (const section of sections) {
+        const sections = (
+          data.contents as Record<string, unknown>
+        )?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+
+        for (const section of sections as Array<Record<string, unknown>>) {
           if (!section.itemSectionRenderer) continue;
-          for (const item of section.itemSectionRenderer.contents) {
-            const v = item.videoRenderer;
-            if (!v?.videoId || !newIds.includes(v.videoId)) continue;
-            const titleRuns = v.title?.runs || [];
-            const channelRuns = v.longBylineText?.runs || [];
-            const thumbnails = v.thumbnail?.thumbnails || [];
+          const items = (section.itemSectionRenderer as Record<string, unknown>).contents || [];
+          for (const item of items as Array<Record<string, unknown>>) {
+            const v = item.videoRenderer as Record<string, unknown> | undefined;
+            if (!v?.videoId || !newIds.includes(v.videoId as string)) continue;
+            const titleRuns = (v.title as Record<string, unknown>)?.runs as Array<Record<string, unknown>> || [];
+            const channelRuns = (v.longBylineText as Record<string, unknown>)?.runs as Array<Record<string, unknown>> || [];
+            const thumbnails = (v.thumbnail as Record<string, unknown>)?.thumbnails as Array<Record<string, unknown>> || [];
             newVideos.push({
-              id: v.videoId,
-              title: titleRuns[0]?.text || "",
-              channel: channelRuns[0]?.text || "",
-              thumbnail: thumbnails[0]?.url || `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg`,
-              views: parseViewCount(v.viewCountText?.simpleText || ""),
+              id: v.videoId as string,
+              title: (titleRuns[0]?.text as string) || "",
+              channel: (channelRuns[0]?.text as string) || "",
+              thumbnail: (thumbnails[0]?.url as string) || `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg`,
+              views: parseViewCount((v.viewCountText as Record<string, unknown>)?.simpleText as string || ""),
               likes: "0",
-              publishedAt: parseRelativeTime(v.publishedTimeText?.simpleText || ""),
+              publishedAt: parseRelativeTime((v.publishedTimeText as Record<string, unknown>)?.simpleText as string || ""),
               trendingRank: newVideos.length + 1,
             });
           }
@@ -202,12 +228,10 @@ export async function GET() {
         console.error("Metadata parse error:", err);
       }
 
-      // Send Telegram if configured
       if (config.telegramBotToken && config.telegramChatId) {
         await sendTelegram(config.telegramBotToken, config.telegramChatId, newVideos);
       }
 
-      // Send Discord if configured
       if (config.discordWebhook) {
         await sendDiscord(config.discordWebhook, newVideos);
       }
