@@ -599,15 +599,35 @@ export default function HomePage() {
                 </svg>
               </button>
             </div>
-            {/* YouTube iframe embed */}
-            <div className="aspect-video bg-black">
-              <iframe
-                src={`https://www.youtube.com/embed/${embedVideo.id}?autoplay=1&rel=0&modestbranding=1`}
-                title={embedVideo.title}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+            {/* YouTube thumbnail + click-to-open (no embed API needed) */}
+            <div className="aspect-video bg-black relative">
+              <a
+                href={`https://www.youtube.com/watch?v=${embedVideo.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full h-full"
+                onClick={() => setEmbedVideo(null)}
+              >
+                {/* Thumbnail image */}
+                <img
+                  src={`https://img.youtube.com/vi/${embedVideo.id}/hqdefault.jpg`}
+                  alt={embedVideo.title}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                {/* Play button overlay */}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                  <div className="w-16 h-16 rounded-full bg-red-600/90 flex items-center justify-center shadow-lg">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </div>
+                </div>
+                {/* "在 YouTube 觀看" label */}
+                <div className="absolute bottom-3 right-3 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                  在 YouTube 觀看 ↗
+                </div>
+              </a>
             </div>
             {/* Video info */}
             <div className="px-5 py-4 border-t border-[#1F2937]">
