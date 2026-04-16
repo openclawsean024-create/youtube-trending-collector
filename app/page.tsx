@@ -602,10 +602,11 @@ export default function HomePage() {
             {/* YouTube iframe embed */}
             <div className="aspect-video bg-black">
               <iframe
-                src={`https://www.youtube.com/embed/${embedVideo.id}?autoplay=1&rel=0&modestbranding=1`}
+                src={`https://www.youtube-nocookie.com/embed/${embedVideo.id}?autoplay=1&rel=0&modestbranding=1`}
                 title={embedVideo.title}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                referrerPolicy="no-referrer-when-downgrade"
                 allowFullScreen
               />
             </div>
