@@ -85,56 +85,66 @@ async function sendDiscord(webhookUrl: string, videos: Array<{
   });
 }
 
-function extractVideoIds(html: string): string[] {
-  const ids: string[] = [];
-  const re = /"videoId":"([^"]+)"/g;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    if (!ids.includes(m[1])) ids.push(m[1]);
-  }
-  return ids;
+function parseViewCount(text: string): string {
+  if (!text) return "0";
+  return text.replace(/[^0-9,]/g, "").replace(/,/g, "") || "0";
 }
 
-function extractMetadata(html: string, ids: string[]): Map<string, { title: string; channel: string; channelId: string; thumbnail: string; views: string; publishedAt: string; description: string }> {
-  const map = new Map();
-  for (const id of ids) {
-    const blockRe = new RegExp(`"videoId":"${id}"[\\s\\S]*?(?="videoId"|$)`, 'g');
-    const blockMatch = blockRe.exec(html);
-    let title = "", channel = "", channelId = "", thumbnail = `https://img.youtube.com/vi/${id}/hqdefault.jpg`, views = "", publishedAt = "", description = "";
-
-    if (blockMatch) {
-      const block = blockMatch[0];
-      const titleMatch = block.match(/"title":\s*\{?"simpleText":\s*"([^"]+)"/) || block.match(/"title":\s*"([^"]+)"/);
-      if (titleMatch) title = titleMatch[1];
-      const channelMatch = block.match(/"(?:owner|longByline)Text":\s*\{?"simpleText":\s*"([^"]+)"/);
-      if (channelMatch) channel = channelMatch[1];
-      const channelIdMatch = block.match(/"(ownerVideoId|channelId)":\s*"([^"]+)"/);
-      if (channelIdMatch) channelId = channelIdMatch[2];
-      const thumbMatch = block.match(/"thumbnails":\s*\[\{"url":\s*"([^"]+)"/);
-      if (thumbMatch) thumbnail = thumbMatch[1];
-      const pubMatch = block.match(/"publishedTimeText":\s*\{?"simpleText":\s*"([^"]+)"/);
-      if (pubMatch) publishedAt = pubMatch[1];
-      const viewMatch = block.match(/"viewCountText":\s*\{?"simpleText":\s*"([^"]+)"/) || block.match(/"viewCountText":\s*"([^"]+)"/);
-      if (viewMatch) views = viewMatch[1];
-      const descMatch = block.match(/"descriptionSnippet":\s*\{?"simpleText":\s*"([^"]+)"/);
-      if (descMatch) description = descMatch[1];
-    }
-    map.set(id, { title, channel, channelId, thumbnail, views, publishedAt, description });
-  }
-  return map;
+function parseRelativeTime(text: string): string {
+  if (!text) return new Date().toISOString();
+  const match = text.match(/(\d+)\s*(秒|分|小時|天|月|年)前/);
+  if (!match) return new Date().toISOString();
+  const val = parseInt(match[1]);
+  const unit = match[2];
+  const now = new Date();
+  if (unit === "秒") now.setSeconds(now.getSeconds() - val);
+  else if (unit === "分") now.setMinutes(now.getMinutes() - val);
+  else if (unit === "小時") now.setHours(now.getHours() - val);
+  else if (unit === "天") now.setDate(now.getDate() - val);
+  else if (unit === "月") now.setMonth(now.getMonth() - val);
+  else if (unit === "年") now.setFullYear(now.getFullYear() - val);
+  return now.toISOString();
 }
 
-async function scrapeTrendingIds(region: string): Promise<string[]> {
-  const url = `https://www.youtube.com/feed/trending?hl=${region === "TW" ? "zh-TW" : "en-US"}`;
+async function scrapeTrendingIds(region: string): Promise<{ ids: string[]; html: string }> {
+  const regionLang = region === "TW" ? "zh-TW" : "en-US";
+  const sp = "EgQIAhAB"; // This week filter
+  const url = `https://www.youtube.com/results?sp=${sp}&search_query=`;
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-      "Accept-Language": region === "TW" ? "zh-TW,zh;q=0.9" : "en-US;q=0.9",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept-Language": `${regionLang},zh;q=0.9,en;q=0.8`,
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     },
   });
   if (!res.ok) throw new Error(`Scrape error: ${res.status}`);
   const html = await res.text();
-  return [...new Set(extractVideoIds(html))].slice(0, 50);
+
+  const jsonMatch = html.match(/ytInitialData\s*=\s*({.*?});/s);
+  if (!jsonMatch) throw new Error("ytInitialData not found");
+
+  const data = JSON.parse(jsonMatch[1]);
+  const ids: string[] = [];
+  const seenIds = new Set<string>();
+
+  try {
+    const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    for (const section of sections) {
+      if (!section.itemSectionRenderer) continue;
+      for (const item of section.itemSectionRenderer.contents) {
+        const v = item.videoRenderer;
+        if (!v?.videoId || seenIds.has(v.videoId)) continue;
+        seenIds.add(v.videoId);
+        ids.push(v.videoId);
+        if (ids.length >= 50) break;
+      }
+      if (ids.length >= 50) break;
+    }
+  } catch (err) {
+    console.error("Parse error:", err);
+  }
+
+  return { ids, html };
 }
 
 export async function GET() {
@@ -145,37 +155,52 @@ export async function GET() {
   }
 
   try {
-    // Scrape TW trending page HTML (no API key needed)
-    const currentIds = await scrapeTrendingIds("TW");
+    const { ids, html } = await scrapeTrendingIds("TW");
+    const currentIds = ids;
+
     const lastIds = await loadLastIds();
     const lastIdSet = new Set(lastIds);
     const newIds = currentIds.filter((id: string) => !lastIdSet.has(id));
 
     if (newIds.length > 0) {
-      // Scrape full metadata for new videos
-      const url = `https://www.youtube.com/feed/trending?hl=zh-TW`;
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-          "Accept-Language": "zh-TW,zh;q=0.9",
-        },
-      });
-      const html = await res.text();
-      const metaMap = extractMetadata(html, newIds);
+      // Parse full metadata from cached HTML for new videos
+      const data = JSON.parse(html.match(/ytInitialData\s*=\s*({.*?});/s)?.[1] || "{}");
+      const newVideos: Array<{
+        id: string;
+        title: string;
+        channel: string;
+        thumbnail: string;
+        views: string;
+        likes: string;
+        publishedAt: string;
+        trendingRank: number;
+      }> = [];
 
-      const newVideos = newIds.slice(0, 20).map((id, idx) => {
-        const meta = metaMap.get(id) || { title: "", channel: "", channelId: "", thumbnail: "", views: "", publishedAt: "", description: "" };
-        return {
-          id,
-          title: meta.title || `Video ${id}`,
-          channel: meta.channel || "Unknown",
-          thumbnail: meta.thumbnail || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-          views: meta.views || "0",
-          likes: "0",
-          publishedAt: meta.publishedAt || "",
-          trendingRank: idx + 1,
-        };
-      });
+      try {
+        const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+        for (const section of sections) {
+          if (!section.itemSectionRenderer) continue;
+          for (const item of section.itemSectionRenderer.contents) {
+            const v = item.videoRenderer;
+            if (!v?.videoId || !newIds.includes(v.videoId)) continue;
+            const titleRuns = v.title?.runs || [];
+            const channelRuns = v.longBylineText?.runs || [];
+            const thumbnails = v.thumbnail?.thumbnails || [];
+            newVideos.push({
+              id: v.videoId,
+              title: titleRuns[0]?.text || "",
+              channel: channelRuns[0]?.text || "",
+              thumbnail: thumbnails[0]?.url || `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg`,
+              views: parseViewCount(v.viewCountText?.simpleText || ""),
+              likes: "0",
+              publishedAt: parseRelativeTime(v.publishedTimeText?.simpleText || ""),
+              trendingRank: newVideos.length + 1,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Metadata parse error:", err);
+      }
 
       // Send Telegram if configured
       if (config.telegramBotToken && config.telegramChatId) {

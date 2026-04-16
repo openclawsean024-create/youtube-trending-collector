@@ -37,118 +37,129 @@ function setCache(key: string, data: unknown) {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
-function extractVideoIds(html: string): string[] {
-  const ids: string[] = [];
-  // Match shortVideoRenderer or videoRenderer from trending page
-  const re = /"videoId":"([^"]+)"/g;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    if (!ids.includes(m[1])) ids.push(m[1]);
-  }
-  return ids;
+// Parse view count string like "觀看次數：109,126次" → "109126"
+function parseViewCount(text: string): string {
+  if (!text) return "0";
+  const cleaned = text.replace(/[^0-9,]/g, "").replace(/,/g, "");
+  return cleaned || "0";
 }
 
-function extractMetadata(html: string, ids: string[]): Map<string, { title: string; channel: string; channelId: string; thumbnail: string; views: string; publishedAt: string; description: string }> {
-  const map = new Map();
-  // Try to extract richMetadata from each video
-  // Pattern: "videoId":"ID","title":{"simpleText":"TITLE...
-  for (const id of ids) {
-    // Find the block containing this videoId
-    const blockRe = new RegExp(`"videoId":"${id}"[\\s\\S]*?(?="videoId"|$)`, 'g');
-    const blockMatch = blockRe.exec(html);
-    let title = "", channel = "", channelId = "", thumbnail = "", views = "", publishedAt = "", description = "";
-
-    if (blockMatch) {
-      const block = blockMatch[0];
-      // Title: "title":{"simpleText":"..."} or "title":"..."
-      const titleMatch = block.match(/"title":\s*\{?"simpleText":\s*"([^"]+)"/) || block.match(/"title":\s*"([^"]+)"/);
-      if (titleMatch) title = titleMatch[1];
-
-      // Channel: "ownerText":{"simpleText":"..."} or "longBylineText":...
-      const channelMatch = block.match(/"(?:owner|longByline)Text":\s*\{?"simpleText":\s*"([^"]+)"/);
-      if (channelMatch) channel = channelMatch[1];
-
-      // Channel ID: "ownerVideoId" or "channelId"
-      const channelIdMatch = block.match(/"(ownerVideoId|channelId)":\s*"([^"]+)"/);
-      if (channelIdMatch) channelId = channelIdMatch[2];
-
-      // Thumbnail: "thumbnails":[{"url":"..."
-      const thumbMatch = block.match(/"thumbnails":\s*\[\{"url":\s*"([^"]+)"/);
-      if (thumbMatch) thumbnail = thumbMatch[1];
-
-      // Published time: "publishedTimeText":{"simpleText":"..."
-      const pubMatch = block.match(/"publishedTimeText":\s*\{?"simpleText":\s*"([^"]+)"/);
-      if (pubMatch) publishedAt = pubMatch[1];
-
-      // View count: "viewCountText":{"simpleText":"..."} or "viewCountText":"..."
-      const viewMatch = block.match(/"viewCountText":\s*\{?"simpleText":\s*"([^"]+)"/) || block.match(/"viewCountText":\s*"([^"]+)"/);
-      if (viewMatch) views = viewMatch[1];
-
-      // Description snippet
-      const descMatch = block.match(/"descriptionSnippet":\s*\{?"simpleText":\s*"([^"]+)"/);
-      if (descMatch) description = descMatch[1];
-    }
-
-    // Fallback: extract from ytInitialData JSON in script tags
-    if (!title) {
-      const titleAlt = html.match(new RegExp(`"videoId":"${id}"[\\s\\S]{0,500}"title":\\s*\\{?"simpleText":\\s*"([^"]+)"`));
-      if (titleAlt) title = titleAlt[1];
-    }
-    if (!thumbnail) {
-      thumbnail = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-    }
-
-    map.set(id, { title, channel, channelId, thumbnail, views, publishedAt, description });
-  }
-  return map;
+// Parse Chinese relative time like "13 小時前" → ISO date
+function parseRelativeTime(text: string): string {
+  if (!text) return new Date().toISOString();
+  const match = text.match(/(\d+)\s*(秒|分|小時|天|月|年)前/);
+  if (!match) return new Date().toISOString();
+  const val = parseInt(match[1]);
+  const unit = match[2];
+  const now = new Date();
+  if (unit === "秒") now.setSeconds(now.getSeconds() - val);
+  else if (unit === "分") now.setMinutes(now.getMinutes() - val);
+  else if (unit === "小時") now.setHours(now.getHours() - val);
+  else if (unit === "天") now.setDate(now.getDate() - val);
+  else if (unit === "月") now.setMonth(now.getMonth() - val);
+  else if (unit === "年") now.setFullYear(now.getFullYear() - val);
+  return now.toISOString();
 }
 
-async function scrapeTrendingPage(region: string, category: string): Promise<VideoItem[]> {
-  // Build trending URL
-  let url = `https://www.youtube.com/feed/trending?hl=${region === "TW" ? "zh-TW" : "en-US"}`;
-  if (category) {
-    // Map category id to URL param
-    url += `&category=${category}`;
+interface ExtractedVideo {
+  id: string;
+  title: string;
+  channel: string;
+  channelId: string;
+  thumbnail: string;
+  views: string;
+  publishedAt: string;
+  description: string;
+}
+
+async function scrapeYouTubeTrending(region: string, category: string): Promise<VideoItem[]> {
+  // Build the YouTube search URL with "This week" filter
+  // sp=EgQIAhAB = "This week" filter (trending videos)
+  const regionLang = region === "TW" ? "zh-TW" : region === "HK" ? "zh-HK" : region === "JP" ? "ja-JP" : region === "KR" ? "ko-KR" : "en-US";
+  
+  // For category-specific trending, use category keyword search
+  let searchQuery = "";
+  const categoryKeywords: Record<string, string> = {
+    "10": "音樂+热门+music+trending",
+    "20": "游戏+gaming+trending",
+    "22": "户外+outdoor+trending",
+    "23": "喜剧+comedy+trending",
+    "24": "娱乐+entertainment+trending",
+    "25": "新闻+news+trending",
+    "27": "宠物+animals+trending",
+    "28": "科技+science+technology+trending",
+    "17": "体育+sports+trending",
+  };
+  if (category && categoryKeywords[category]) {
+    searchQuery = encodeURIComponent(categoryKeywords[category].split("+")[0]);
   }
+
+  const sp = "EgQIAhAB"; // This week filter
+  const url = `https://www.youtube.com/results?sp=${sp}&search_query=${searchQuery}`;
 
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-      "Accept-Language": region === "TW" ? "zh-TW,zh;q=0.9" : "en-US;q=0.9",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept-Language": `${regionLang},zh;q=0.9,en;q=0.8`,
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     },
   });
 
-  if (!res.ok) throw new Error(`YouTube trending scrape failed: ${res.status}`);
-
+  if (!res.ok) throw new Error(`YouTube scrape failed: ${res.status}`);
   const html = await res.text();
 
-  // Extract video IDs from HTML
-  const ids = extractVideoIds(html);
-  
-  // Deduplicate
-  const uniqueIds = [...new Set(ids)].slice(0, 30);
+  // Extract ytInitialData JSON from HTML
+  const jsonMatch = html.match(/ytInitialData\s*=\s*({.*?});/s);
+  if (!jsonMatch) throw new Error("ytInitialData not found in page");
 
-  // Extract metadata
-  const metaMap = extractMetadata(html, uniqueIds);
+  const data = JSON.parse(jsonMatch[1]);
+  const videos: VideoItem[] = [];
+  const seenIds = new Set<string>();
 
-  // Build VideoItem array — for trending, rank is position
-  const videos: VideoItem[] = uniqueIds.map((id, idx) => {
-    const meta = metaMap.get(id) || { title: "", channel: "", channelId: "", thumbnail: "", views: "", publishedAt: "", description: "" };
-    return {
-      id,
-      title: meta.title || `YouTube Video ${id}`,
-      channel: meta.channel || "Unknown",
-      channelId: meta.channelId || "",
-      thumbnail: meta.thumbnail || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-      views: meta.views || "0",
-      likes: "0",
-      comments: "0",
-      publishedAt: meta.publishedAt || "",
-      trendingRank: idx + 1,
-      categoryId: category,
-      description: meta.description || "",
-    };
-  });
+  try {
+    const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    for (const section of sections) {
+      if (!section.itemSectionRenderer) continue;
+      for (const item of section.itemSectionRenderer.contents) {
+        const v = item.videoRenderer;
+        if (!v?.videoId) continue;
+        if (seenIds.has(v.videoId)) continue;
+        seenIds.add(v.videoId);
+
+        const titleRuns = v.title?.runs || [];
+        const title = titleRuns[0]?.text || "";
+        const channelRuns = v.longBylineText?.runs || [];
+        const channel = channelRuns[0]?.text || "";
+        const channelId = channelRuns[0]?.navigationEndpoint?.browseEndpoint?.browseId || "";
+        const viewText = v.viewCountText?.simpleText || "";
+        const publishedText = v.publishedTimeText?.simpleText || "";
+        const descRuns = v.descriptionSnippet?.runs || [];
+        const description = descRuns.map((r: { text: string }) => r.text).join("");
+        const thumbnails = v.thumbnail?.thumbnails || [];
+        const thumb = thumbnails[0]?.url || `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg`;
+
+        videos.push({
+          id: v.videoId,
+          title,
+          channel,
+          channelId,
+          thumbnail: thumb,
+          views: parseViewCount(viewText),
+          likes: "0",
+          comments: "0",
+          publishedAt: parseRelativeTime(publishedText),
+          trendingRank: videos.length + 1,
+          categoryId: category || "",
+          description,
+        });
+
+        if (videos.length >= 30) break;
+      }
+      if (videos.length >= 30) break;
+    }
+  } catch (err) {
+    console.error("Error parsing ytInitialData:", err);
+  }
 
   return videos;
 }
@@ -166,7 +177,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const videos = await scrapeTrendingPage(region, category);
+    const videos = await scrapeYouTubeTrending(region, category);
     setCache(cacheKey, videos);
     return NextResponse.json(videos);
   } catch (err) {
