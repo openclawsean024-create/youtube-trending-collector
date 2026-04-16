@@ -84,7 +84,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const [apiStatus, setApiStatus] = useState<{ hasApiKey: boolean } | null>(null);
 
   const STORAGE_KEY = "youtube-trending-settings";
 
@@ -115,11 +114,7 @@ export default function SettingsPage() {
         setAutoUpdateInterval(hasStored.autoUpdateInterval ?? data.autoUpdateInterval ?? 0);
       })
       .catch(() => {});
-    fetch("/api/status")
-      .then((r) => r.json())
-      .then((d) => setApiStatus(d))
-      .catch(() => setApiStatus({ hasApiKey: false }));
-  }, []);
+
 
   // Persist ALL settings to localStorage (for page.tsx to reload)
   useEffect(() => {
@@ -300,16 +295,7 @@ export default function SettingsPage() {
           </div>
         </SectionCard>
 
-        {/* API Key status */}
-        <SectionCard title="🔑 API 狀態">
-          <div className="flex items-center gap-3 text-sm">
-            <span className={`w-3 h-3 rounded-full ${apiStatus?.hasApiKey ? "bg-green-500" : "bg-red-500"}`} />
-            <span className="text-[#9CA3AF]">
-              {apiStatus?.hasApiKey ? "✅ YOUTUBE_API_KEY 已設定" : "❌ YOUTUBE_API_KEY 未設定"}
-            </span>
-          </div>
-          <FieldHint>請在 Vercel 環境變數中設定 YOUTUBE_API_KEY</FieldHint>
-        </SectionCard>
+
 
         {/* Save + Clear buttons */}
         <div className="flex items-center gap-4">
