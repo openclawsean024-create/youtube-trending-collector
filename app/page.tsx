@@ -281,7 +281,7 @@ export default function HomePage() {
       const data = await res.json();
       setVideos(Array.isArray(data) ? data : []);
     } catch {
-      setToast({ message: "⚠️ 無法載入影片，請確認 API Key 已設定", type: "error" });
+      setToast({ message: "⚠️ 無法載入影片，請稍後再試", type: "error" });
       setVideos([]);
     } finally {
       setLoading(false);
@@ -556,7 +556,6 @@ export default function HomePage() {
                 <div className="text-5xl mb-4">📭</div>
                 <p className="text-base font-medium text-[#F9FAFB] mb-2">尚無收集記錄</p>
                 <p className="text-sm">選擇地區或類別後點擊「更新」以抓取熱門影片</p>
-                <p className="text-xs mt-1 text-[#6B7280]">請確認 YOUTUBE_API_KEY 環境變數已設定</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
