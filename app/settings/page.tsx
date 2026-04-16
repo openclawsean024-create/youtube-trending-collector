@@ -114,7 +114,7 @@ export default function SettingsPage() {
         setAutoUpdateInterval(hasStored.autoUpdateInterval ?? data.autoUpdateInterval ?? 0);
       })
       .catch(() => {});
-
+  }, []);
 
   // Persist ALL settings to localStorage (for page.tsx to reload)
   useEffect(() => {
