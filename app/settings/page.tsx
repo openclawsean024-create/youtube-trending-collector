@@ -85,6 +85,7 @@ export default function SettingsPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
 
+
   const STORAGE_KEY = "youtube-trending-settings";
 
   // Load from localStorage on mount
@@ -114,6 +115,7 @@ export default function SettingsPage() {
         setAutoUpdateInterval(hasStored.autoUpdateInterval ?? data.autoUpdateInterval ?? 0);
       })
       .catch(() => {});
+
   }, []);
 
   // Persist ALL settings to localStorage (for page.tsx to reload)
@@ -294,8 +296,6 @@ export default function SettingsPage() {
             <FieldHint>目前以 Telegram 為主，Discord 仍可使用</FieldHint>
           </div>
         </SectionCard>
-
-
 
         {/* Save + Clear buttons */}
         <div className="flex items-center gap-4">
