@@ -77,7 +77,7 @@ function SkeletonCard() {
   );
 }
 
-function VideoCard({ video, index }: { video: VideoItem; index: number }) {
+function VideoCard({ video, index, onPlay }: { video: VideoItem; index: number; onPlay: (v: VideoItem) => void }) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -91,23 +91,24 @@ function VideoCard({ video, index }: { video: VideoItem; index: number }) {
 
   return (
     <div className="group">
-      {/* Thumbnail */}
-      <div className="relative">
-        <a
-          href={`https://youtube.com/watch?v=${video.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block"
-        >
-          <img
-            src={video.thumbnail}
-            alt={video.title}
-            className="w-full aspect-video object-cover rounded-xl bg-[#374151] group-hover:rounded-none transition-all duration-200"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9' fill='%23374151'%3E%3Crect width='16' height='9' fill='%23374151'/%3E%3C/svg%3E";
-            }}
-          />
-        </a>
+      {/* Thumbnail with play overlay */}
+      <div className="relative cursor-pointer" onClick={() => onPlay(video)}>
+        <img
+          src={video.thumbnail}
+          alt={video.title}
+          className="w-full aspect-video object-cover rounded-xl bg-[#374151] group-hover:rounded-none transition-all duration-200"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9' fill='%23374151'%3E%3Crect width='16' height='9' fill='%23374151'/%3E%3C/svg%3E";
+          }}
+        />
+        {/* Play button overlay */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-xl">
+          <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center shadow-lg">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </div>
+        </div>
         <span className="absolute bottom-1.5 right-1.5 bg-[#0F172A] text-[#F9FAFB] text-xs px-1.5 py-0.5 rounded font-medium">
           #{index + 1}
         </span>
@@ -213,6 +214,7 @@ export default function HomePage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [embedVideo, setEmbedVideo] = useState<VideoItem | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load settings from localStorage + /api/config
@@ -559,13 +561,69 @@ export default function HomePage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
                 {sortedVideos.map((video, i) => (
-                  <VideoCard key={video.id} video={video} index={i} />
+                  <VideoCard key={video.id} video={video} index={i} onPlay={setEmbedVideo} />
                 ))}
               </div>
             )}
           </div>
         </main>
       </div>
+
+      {/* Video embed modal — uses YouTube iframe (no API key needed) */}
+      {embedVideo && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setEmbedVideo(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl mx-4 rounded-2xl overflow-hidden bg-[#0F172A] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#1F2937]">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center flex-shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                </div>
+                <h3 className="text-sm font-medium text-[#F9FAFB] truncate">{embedVideo.title}</h3>
+              </div>
+              <button
+                onClick={() => setEmbedVideo(null)}
+                className="ml-4 flex-shrink-0 p-2 rounded-full hover:bg-[#1F2937] text-[#9CA3AF] hover:text-white transition-colors"
+                aria-label="關閉"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            {/* YouTube iframe embed */}
+            <div className="aspect-video bg-black">
+              <iframe
+                src={`https://www.youtube.com/embed/${embedVideo.id}?autoplay=1&rel=0&modestbranding=1`}
+                title={embedVideo.title}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            {/* Video info */}
+            <div className="px-5 py-4 border-t border-[#1F2937]">
+              <p className="text-xs text-[#9CA3AF] mb-2 truncate">{embedVideo.channel}</p>
+              <p className="text-xs text-[#9CA3AF]">
+                {formatViews(embedVideo.views)} · {timeAgo(embedVideo.publishedAt)}
+              </p>
+              {embedVideo.description && (
+                <p className="text-xs text-[#6B7280] mt-2 leading-relaxed line-clamp-3">
+                  {embedVideo.description}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
