@@ -725,7 +725,7 @@ model UsageLog {
 
 ### 7.2 ⭐ ADR (Architecture Decision Records)
 
-#### **ADR-001：轉型為「中文 YouTuber 一站式 workflow」而非 YouTube 熱門蒐集**
+### ADR-001：轉型為「中文 YouTuber 一站式 workflow」而非 YouTube 熱門蒐集
 
 - **決策**：v3.0 從「YouTube 熱門影片蒐集」徹底轉型為「**中文 YouTuber 一站式自動化工作流**」
 - **狀態**：✅ 已決定（2026-07-19）
@@ -746,7 +746,7 @@ model UsageLog {
 - **後悔成本**：低（v2.2.1 代碼僅部分可重用）
 - **再討論時機**：3 月 KPI 沒達標時
 
-#### **ADR-002：使用 GPT-4o-mini + Claude Sonnet 雙 AI 引擎**
+### ADR-002：使用 GPT-4o-mini + Claude Sonnet 雙 AI 引擎
 
 - **決策**：主要使用 GPT-4o-mini，複雜任務（腳本生成）用 Claude Sonnet
 - **狀態**：✅ 已決定
@@ -765,7 +765,7 @@ model UsageLog {
 - **後悔成本**：低（單一 provider 切換約 1 週）
 - **再討論時機**：OpenAI 或 Anthropic 重大漲價時
 
-#### **ADR-003：NextAuth v4 + Google OAuth（不用 email/password）**
+### ADR-003：NextAuth v4 + Google OAuth（不用 email/password）
 
 - **決策**：NextAuth v4 + Google OAuth 為主登入方式
 - **狀態**：✅ 已決定
@@ -783,7 +783,7 @@ model UsageLog {
   2. 未來可擴展 YouTube Data API（v2 評估）
 - **後悔成本**：加 email/password 約 1 天
 
-#### **ADR-004：PostgreSQL + Supabase 而非 MongoDB**
+### ADR-004：PostgreSQL + Supabase 而非 MongoDB
 
 - **決策**：使用 PostgreSQL + Prisma（Supabase 託管）
 - **狀態**：✅ 已決定
@@ -1019,7 +1019,7 @@ quadrantChart
 
 ---
 
-## 11. ⭐ 市場驗證計畫（v3.0 強化版）
+## 11. 市場驗證計畫（v3.0 強化版）
 
 ### 11.1 驗證前 3 個關鍵問題
 
@@ -1100,7 +1100,7 @@ Step 3: 第二次仍 < 5 個註冊
 
 ---
 
-## 12. ⭐ 失敗模式 SOP（v3.0 強化版）
+## 12. 失敗模式 SOP（v3.0 強化版）
 
 ### 12.1 12 種常見失敗模式
 
@@ -1156,7 +1156,7 @@ Day 11-14: 重新寫 §1.1 問題陳述 + §3.1 MVP
 
 ---
 
-## 13. ⭐ MetaGPT / spec-kit 對齊
+## 13. MetaGPT / spec-kit 對齊
 
 ### 13.1 MUST / SHOULD / MAY
 
@@ -1289,7 +1289,7 @@ v3.0：預期 7/10（sweet spot-driven rewrite）
 
 ---
 
-## 15. ⭐ 深度市調報告（Sweet Spot 5 問體檢結果）
+## 15. 深度市調報告（Sweet Spot 5 問體檢結果）
 
 ### 15.1 Sweet Spot 5 問體檢結果（2026-07-19 subagent）
 
