@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseViewCount, parseRelativeTime } from "@/lib/parse";
 
 // In-memory cache with 5 min TTL
 interface CacheEntry {
@@ -37,29 +38,8 @@ function setCache(key: string, data: unknown) {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
-// Parse view count string like "觀看次數：109,126次" → "109126"
-function parseViewCount(text: string): string {
-  if (!text) return "0";
-  const cleaned = text.replace(/[^0-9,]/g, "").replace(/,/g, "");
-  return cleaned || "0";
-}
-
-// Parse Chinese relative time like "13 小時前" → ISO date
-function parseRelativeTime(text: string): string {
-  if (!text) return new Date().toISOString();
-  const match = text.match(/(\d+)\s*(秒|分|小時|天|月|年)前/);
-  if (!match) return new Date().toISOString();
-  const val = parseInt(match[1]);
-  const unit = match[2];
-  const now = new Date();
-  if (unit === "秒") now.setSeconds(now.getSeconds() - val);
-  else if (unit === "分") now.setMinutes(now.getMinutes() - val);
-  else if (unit === "小時") now.setHours(now.getHours() - val);
-  else if (unit === "天") now.setDate(now.getDate() - val);
-  else if (unit === "月") now.setMonth(now.getMonth() - val);
-  else if (unit === "年") now.setFullYear(now.getFullYear() - val);
-  return now.toISOString();
-}
+// Parse view count string like "觀看次數：109,126次" → "109126"  (moved to lib/parse.ts)
+// Parse Chinese relative time like "13 小時前" → ISO date  (moved to lib/parse.ts)
 
 interface ExtractedVideo {
   id: string;
@@ -141,11 +121,13 @@ async function scrapeYouTubeTrending(region: string, category: string): Promise<
   const seenIds = new Set<string>();
 
   try {
-    const sections = (
-      data.contents as Record<string, unknown>
-    )?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const dataContents = (data.contents as Record<string, unknown> | undefined) || {};
+    const twoCol = (dataContents.twoColumnSearchResultsRenderer as Record<string, unknown> | undefined) || {};
+    const primaryContents = (twoCol.primaryContents as Record<string, unknown> | undefined) || {};
+    const sectionList = (primaryContents.sectionListRenderer as Record<string, unknown> | undefined) || {};
+    const sections = (sectionList.contents as Array<Record<string, unknown>>) || [];
 
-    for (const section of sections as Array<Record<string, unknown>>) {
+    for (const section of sections) {
       if (!section.itemSectionRenderer) continue;
       const items = (section.itemSectionRenderer as Record<string, unknown>).contents || [];
       for (const item of items as Array<Record<string, unknown>>) {

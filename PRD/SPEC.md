@@ -1,11 +1,12 @@
-# 中文 YouTuber 自動化工作流 (YouTuber Workflow) — 規格計劃書 v3.0
+# 中文 YouTuber 自動化工作流 (YouTuber Workflow) — 規格計劃書 v3.0.2
 
-> **版本**：v3.0｜**更新日期**：2026-07-19｜**維護者**：Sophia (CPO)｜**對接技術**：Alan (CTO)
+> **版本**：v3.0.2（patch）｜**更新日期**：2026-09-06｜**維護者**：Sophia (CPO)｜**對接技術**：Alan (CTO)
 > **對應 GitHub**：[openclawsean024-create/youtube-trending-collector](https://github.com/openclawsean024-create/youtube-trending-collector/blob/main/PRD/SPEC.md)
-> **PRD 改版紀錄**：v2.2.1 → **v3.0 sweet-spot-driven 全面轉向**
+> **PRD 改版紀錄**：v2.2.1 → v3.0 sweet-spot-driven 全面轉向 → **v3.0.2 fleet patch**
 > **對應 skill**：`write-prd-v2` v3.0（sweet spot 重寫版）
-> **Sweet Spot 評分**：3 / 10（kill）→ **v3.0 重新定位後預期提升至 7/10**
+> **Sweet Spot 評分**：3 / 10（kill）→ v3.0 重新定位後預期提升至 7/10 → v3.0.2 補完 test/dev 基礎建設
 > **重大轉向**：從「YouTube 熱門影片蒐集/排行」徹底轉型為「**中文 YouTuber 一站式自動化工作流**」 — **腳本生成 + 縮圖建議 + SEO 標題 + Hashtag 優化 + 觀眾問題回答草稿**。**避免與 YouTube Studio / TubeBuddy / vidIQ / Social Blade 正面競爭**，切入「**中文 YouTuber 真正缺的全流程 AI 助手**」無人滿足的 niche。
+> **v3.0.2 patch 重點**：套用 SPEC v3.0 契約（§1–§19 全部套用）、加入 9 章標準化結構章節、補 Vitest 單元測試基礎建設、補 GHA CI workflow、加入 CHANGELOG。
 
 ---
 

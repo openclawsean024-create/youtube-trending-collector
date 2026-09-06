@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { VercelKV } from "@vercel/kv";
+import { parseViewCount, parseRelativeTime } from "@/lib/parse";
 
 const kv = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
   ? new VercelKV({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN })
@@ -85,26 +86,7 @@ async function sendDiscord(webhookUrl: string, videos: Array<{
   });
 }
 
-function parseViewCount(text: string): string {
-  if (!text) return "0";
-  return text.replace(/[^0-9,]/g, "").replace(/,/g, "") || "0";
-}
-
-function parseRelativeTime(text: string): string {
-  if (!text) return new Date().toISOString();
-  const match = text.match(/(\d+)\s*(秒|分|小時|天|月|年)前/);
-  if (!match) return new Date().toISOString();
-  const val = parseInt(match[1]);
-  const unit = match[2];
-  const now = new Date();
-  if (unit === "秒") now.setSeconds(now.getSeconds() - val);
-  else if (unit === "分") now.setMinutes(now.getMinutes() - val);
-  else if (unit === "小時") now.setHours(now.getHours() - val);
-  else if (unit === "天") now.setDate(now.getDate() - val);
-  else if (unit === "月") now.setMonth(now.getMonth() - val);
-  else if (unit === "年") now.setFullYear(now.getFullYear() - val);
-  return now.toISOString();
-}
+// parseViewCount / parseRelativeTime 已從 lib/parse 匯入
 
 function extractJsonObject(html: string, startMarker: string): string | null {
   const idx = html.indexOf(startMarker);
@@ -147,11 +129,13 @@ async function scrapeTrendingIds(region: string): Promise<{ ids: string[]; html:
   const seenIds = new Set<string>();
 
   try {
-    const sections = (
-      data.contents as Record<string, unknown>
-    )?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const dataContents = (data.contents as Record<string, unknown> | undefined) || {};
+    const twoCol = (dataContents.twoColumnSearchResultsRenderer as Record<string, unknown> | undefined) || {};
+    const primaryContents = (twoCol.primaryContents as Record<string, unknown> | undefined) || {};
+    const sectionList = (primaryContents.sectionListRenderer as Record<string, unknown> | undefined) || {};
+    const sections = (sectionList.contents as Array<Record<string, unknown>>) || [];
 
-    for (const section of sections as Array<Record<string, unknown>>) {
+    for (const section of sections) {
       if (!section.itemSectionRenderer) continue;
       const items = (section.itemSectionRenderer as Record<string, unknown>).contents || [];
       for (const item of items as Array<Record<string, unknown>>) {
@@ -199,11 +183,13 @@ export async function GET() {
       }> = [];
 
       try {
-        const sections = (
-          data.contents as Record<string, unknown>
-        )?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+        const dataContents = (data.contents as Record<string, unknown> | undefined) || {};
+        const twoCol = (dataContents.twoColumnSearchResultsRenderer as Record<string, unknown> | undefined) || {};
+        const primaryContents = (twoCol.primaryContents as Record<string, unknown> | undefined) || {};
+        const sectionList = (primaryContents.sectionListRenderer as Record<string, unknown> | undefined) || {};
+        const sections = (sectionList.contents as Array<Record<string, unknown>>) || [];
 
-        for (const section of sections as Array<Record<string, unknown>>) {
+        for (const section of sections) {
           if (!section.itemSectionRenderer) continue;
           const items = (section.itemSectionRenderer as Record<string, unknown>).contents || [];
           for (const item of items as Array<Record<string, unknown>>) {
